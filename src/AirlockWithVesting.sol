@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BUSL-1.1
+ 
 pragma solidity ^0.8.24;
 
 import { Ownable } from "@openzeppelin/access/Ownable.sol";
@@ -11,7 +11,7 @@ import { IPoolInitializer } from "src/interfaces/IPoolInitializer.sol";
 import { ILiquidityMigrator } from "src/interfaces/ILiquidityMigrator.sol";
 import { DERC20 } from "src/DERC20.sol";
 import { Airlock, ModuleState, AssetData } from "src/Airlock.sol";
-import { SimpleLinearVesting } from "src/vesting/SimpleLinearVesting.sol";
+import { IVestingFactory } from "src/vesting/IVestingFactory.sol";
 
 struct CreateWithVestingParams {
     uint256 initialSupply;
@@ -44,6 +44,12 @@ contract AirlockWithVesting is Airlock {
     event CreatorVestingDeployed(address indexed asset, address vesting, address indexed creator, uint256 amount);
     event PresaleReserved(address indexed asset, address indexed distributor, uint256 amount);
 
+    address public vestingFactory;
+
+    function setVestingFactory(address factory) external onlyOwner {
+        vestingFactory = factory;
+    }
+
     function createWithVesting(
         CreateWithVestingParams calldata p
     )
@@ -58,8 +64,16 @@ contract AirlockWithVesting is Airlock {
         asset = p.tokenFactory.create(p.initialSupply, address(this), address(this), p.salt, p.tokenFactoryData);
         (governance, timelock) = p.governanceFactory.create(asset, p.governanceFactoryData);
 
-        ERC20(asset).approve(address(p.poolInitializer), p.numTokensToSell);
-        pool = p.poolInitializer.initialize(asset, p.numeraire, p.numTokensToSell, p.salt, p.poolInitializerData);
+        uint256 reserved = p.creatorVestingAmount + p.presaleVestingAmount;
+        uint256 toSell = p.numTokensToSell;
+        if (reserved >= toSell) {
+            toSell = 0;
+        } else {
+            unchecked { toSell = toSell - reserved; }
+        }
+
+        ERC20(asset).approve(address(p.poolInitializer), toSell);
+        pool = p.poolInitializer.initialize(asset, p.numeraire, toSell, p.salt, p.poolInitializerData);
 
         migrationPool = p.liquidityMigrator.initialize(asset, p.numeraire, p.liquidityMigratorData);
         DERC20(asset).lockPool(migrationPool);
@@ -68,15 +82,17 @@ contract AirlockWithVesting is Airlock {
 
         if (p.creatorVestingAmount > 0) {
             require(excessAsset >= p.creatorVestingAmount, "insufficient excess for creator vesting");
-            SimpleLinearVesting vest = new SimpleLinearVesting(
+            require(vestingFactory != address(0), "vesting factory not set");
+            ERC20(asset).safeTransfer(vestingFactory, p.creatorVestingAmount);
+            address vestingAddr = IVestingFactory(vestingFactory).create(
                 asset,
                 p.creator,
+                uint128(p.creatorVestingAmount),
                 p.creatorVestingStart,
                 p.creatorVestingDuration
             );
-            ERC20(asset).safeTransfer(address(vest), p.creatorVestingAmount);
             excessAsset -= p.creatorVestingAmount;
-            emit CreatorVestingDeployed(asset, address(vest), p.creator, p.creatorVestingAmount);
+            emit CreatorVestingDeployed(asset, vestingAddr, p.creator, p.creatorVestingAmount);
         }
 
         if (p.presaleVestingAmount > 0) {

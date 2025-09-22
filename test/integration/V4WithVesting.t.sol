@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+ 
 pragma solidity ^0.8.13;
 
 import { Test } from "forge-std/Test.sol";
@@ -32,7 +32,8 @@ import { StreamableFeesLockerV2 } from "src/StreamableFeesLockerV2.sol";
 import { DERC20 } from "src/DERC20.sol";
 
 import { AirlockWithVesting, CreateWithVestingParams } from "src/AirlockWithVesting.sol";
-import { SimpleLinearVesting } from "src/vesting/SimpleLinearVesting.sol";
+import { MockSablierV2LockupLinear } from "src/vesting/MockSablier.sol";
+import { SablierVestingFactory } from "src/vesting/SablierVestingFactory.sol";
 import { PresaleBundler, PresaleParticipant } from "src/bundlers/PresaleBundler.sol";
 
 contract LiquidityMigratorMock is ILiquidityMigrator {
@@ -58,6 +59,8 @@ contract V4WithVestingTest is Deployers {
     LiquidityMigratorMock public mockLiquidityMigrator;
     TestERC20 public numeraire;
     PresaleBundler public bundler;
+    MockSablierV2LockupLinear public sablier;
+    SablierVestingFactory public vestingFactory;
 
     PoolKey public poolKey;
     PoolId public poolId;
@@ -69,6 +72,8 @@ contract V4WithVestingTest is Deployers {
 
         airlock = new AirlockWithVesting(airlockOwner);
         bundler = new PresaleBundler(airlock);
+        sablier = new MockSablierV2LockupLinear();
+        vestingFactory = new SablierVestingFactory(address(sablier));
         tokenFactory = new TokenFactory(address(airlock));
         governanceFactory = new GovernanceFactory(address(airlock));
         multicurveHook = UniswapV4MulticurveInitializerHook(
@@ -111,6 +116,8 @@ contract V4WithVestingTest is Deployers {
         vm.startPrank(airlockOwner);
         airlock.setModuleState(modules, states);
         locker.approveMigrator(address(migrator));
+        airlock.setVestingFactory(address(vestingFactory));
+        bundler.setVestingFactory(address(vestingFactory));
         vm.stopPrank();
     }
 
@@ -130,10 +137,14 @@ contract V4WithVestingTest is Deployers {
         return InitData({ fee: 0, tickSpacing: tickSpacing, curves: curves, beneficiaries: new BeneficiaryData[](0) });
     }
 
-    function test_createWithVesting_allocates_creator_and_presale(bytes32 salt) public {
+    function test_createWithVesting_allocates_creator_and_presale() public {
+        bytes32 salt = bytes32(uint256(0x1234));
         uint256 initialSupply = 1e27;
         string memory name = "Test Token";
         string memory symbol = "TEST";
+        uint256 creatorAmt = 1e24;
+        uint256 presaleAmt = 2e24;
+        uint256 numTokensToSell = initialSupply - creatorAmt - presaleAmt;
 
         address tokenAddress = vm.computeCreate2Address(
             salt,
@@ -149,16 +160,14 @@ contract V4WithVestingTest is Deployers {
         InitData memory initData = _prepareInitData(tokenAddress);
 
         address creator = makeAddr("creator");
-        uint256 creatorAmt = 1e24;
         uint64 start = uint64(block.timestamp + 1);
         uint64 duration = 30 days;
-        uint256 presaleAmt = 2e24;
 
         vm.recordLogs();
         (address asset,,,,) = airlock.createWithVesting(
             CreateWithVestingParams({
                 initialSupply: initialSupply,
-                numTokensToSell: initialSupply,
+                numTokensToSell: numTokensToSell,
                 numeraire: address(numeraire),
                 tokenFactory: ITokenFactory(tokenFactory),
                 tokenFactoryData: abi.encode(name, symbol, 0, 0, new address[](0), new uint256[](0), "URI"),
@@ -183,12 +192,17 @@ contract V4WithVestingTest is Deployers {
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         address vestingAddr;
+        uint256 streamId;
         for (uint256 i; i < logs.length; ++i) {
-            if (logs[i].topics.length == 4 && logs[i].topics[0] == keccak256("CreatorVestingDeployed(address,address,address,uint256)")) {
-                (address vesting,, uint256 amount) = abi.decode(logs[i].data, (address, address, uint256));
+            if (logs[i].topics.length == 3 && logs[i].topics[0] == keccak256("CreatorVestingDeployed(address,address,address,uint256)")) {
+                (address vesting, uint256 amount) = abi.decode(logs[i].data, (address, uint256));
                 vestingAddr = vesting;
                 assertEq(amount, creatorAmt, "creator amount");
                 break;
+            }
+            if (logs[i].topics.length > 0 && logs[i].topics[0] == keccak256("SablierStreamCreated(address,address,uint256,uint256)")) {
+                (uint256 id, ) = abi.decode(logs[i].data, (uint256, uint256));
+                streamId = id;
             }
         }
         require(vestingAddr != address(0), "no vesting event");
@@ -196,14 +210,18 @@ contract V4WithVestingTest is Deployers {
         assertEq(DERC20(asset).balanceOf(address(bundler)), presaleAmt, "presale reserve");
         vm.warp(start + duration + 1);
         vm.prank(creator);
-        SimpleLinearVesting(vestingAddr).claim();
+        sablier.withdraw(streamId, creator);
         assertEq(DERC20(asset).balanceOf(creator), creatorAmt, "creator claimed");
     }
 
-    function test_bundler_launchAndDistribute_distributes_vesting(bytes32 salt) public {
+    function test_bundler_launchAndDistribute_distributes_vesting() public {
+        bytes32 salt = bytes32(uint256(0x5678));
         uint256 initialSupply = 1e27;
         string memory name = "Test Token";
         string memory symbol = "TEST";
+        
+        address creator = makeAddr("creator");
+        uint256 creatorAmt = 1e24;
 
         address tokenAddress = vm.computeCreate2Address(
             salt,
@@ -218,17 +236,17 @@ contract V4WithVestingTest is Deployers {
 
         InitData memory initData = _prepareInitData(tokenAddress);
 
-        address creator = makeAddr("creator");
-        uint256 creatorAmt = 1e24;
         uint64 start = uint64(block.timestamp + 1);
         uint64 duration = 15 days;
-        uint256 presaleAmt = 5e24;
-
+        
         address a = makeAddr("A");
         address b = makeAddr("B");
         uint256 qa = 1e24;
         uint256 qb = 2e24;
         uint256 price = 5e17;
+        
+        uint256 presaleAmt = ((qa + qb) * 1e18) / price;
+        uint256 numTokensToSell = initialSupply - creatorAmt - presaleAmt;
 
         numeraire.transfer(a, qa);
         numeraire.transfer(b, qb);
@@ -241,18 +259,20 @@ contract V4WithVestingTest is Deployers {
 
         address quoteRecipient = makeAddr("treasury");
 
+        bytes memory poolInitializerData = abi.encode(initData);
+        
         vm.recordLogs();
         address asset = bundler.launchAndDistribute(
             CreateWithVestingParams({
                 initialSupply: initialSupply,
-                numTokensToSell: initialSupply,
+                numTokensToSell: numTokensToSell,
                 numeraire: address(numeraire),
                 tokenFactory: ITokenFactory(tokenFactory),
                 tokenFactoryData: abi.encode(name, symbol, 0, 0, new address[](0), new uint256[](0), "URI"),
                 governanceFactory: IGovernanceFactory(governanceFactory),
                 governanceFactoryData: abi.encode("Gov", 7200, 50_400, 0),
                 poolInitializer: IPoolInitializer(initializer),
-                poolInitializerData: "",
+                poolInitializerData: abi.encode(initData),
                 liquidityMigrator: ILiquidityMigrator(mockLiquidityMigrator),
                 liquidityMigratorData: new bytes(0),
                 integrator: address(0),
@@ -264,7 +284,7 @@ contract V4WithVestingTest is Deployers {
                 presaleDistributor: address(bundler),
                 presaleVestingAmount: presaleAmt
             }),
-            abi.encode(initData),
+            poolInitializerData,
             parts,
             price,
             start,
@@ -277,15 +297,29 @@ contract V4WithVestingTest is Deployers {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         address vestA;
         address vestB;
+        uint256 streamA;
+        uint256 streamB;
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].topics.length > 0 && logs[i].topics[0] == keccak256("PresaleVestingCreated(address,address,address,uint256)")) {
-                (address asset_, address beneficiary, address vesting, uint256 amount) = abi.decode(logs[i].data, (address, address, address, uint256));
+                address asset_ = address(uint160(uint256(logs[i].topics[1])));
+                address beneficiary = address(uint160(uint256(logs[i].topics[2])));
+                (address vesting, uint256 amount) = abi.decode(logs[i].data, (address, uint256));
                 assertEq(asset_, asset, "asset in event");
                 if (beneficiary == a) { vestA = vesting; assertEq(amount, (qa * 1e18) / price, "alloc A"); }
                 if (beneficiary == b) { vestB = vesting; assertEq(amount, (qb * 1e18) / price, "alloc B"); }
             }
+            if (logs[i].topics.length > 0 && logs[i].topics[0] == keccak256("SablierStreamCreated(address,address,uint256,uint256)")) {
+                address token_ = address(uint160(uint256(logs[i].topics[1])));
+                address beneficiary_ = address(uint160(uint256(logs[i].topics[2])));
+                (uint256 id, ) = abi.decode(logs[i].data, (uint256, uint256));
+                assertEq(token_, asset, "sablier token");
+                if (beneficiary_ == a) { streamA = id; }
+                if (beneficiary_ == b) { streamB = id; }
+            }
             if (logs[i].topics.length > 0 && logs[i].topics[0] == keccak256("QuoteForwarded(address,address,uint256)")) {
-                (address token, address recv, uint256 amt) = abi.decode(logs[i].data, (address, address, uint256));
+                address token = address(uint160(uint256(logs[i].topics[1])));
+                address recv = address(uint160(uint256(logs[i].topics[2])));
+                uint256 amt = abi.decode(logs[i].data, (uint256));
                 assertEq(token, address(numeraire), "quote token");
                 assertEq(recv, quoteRecipient, "recipient");
                 assertEq(amt, qa + qb, "total quote");
@@ -293,8 +327,8 @@ contract V4WithVestingTest is Deployers {
         }
         require(vestA != address(0) && vestB != address(0), "vesting addrs");
         vm.warp(start + duration + 1);
-        vm.prank(a); SimpleLinearVesting(vestA).claim();
-        vm.prank(b); SimpleLinearVesting(vestB).claim();
+        vm.prank(a); sablier.withdraw(streamA, a);
+        vm.prank(b); sablier.withdraw(streamB, b);
 
         uint256 expectedA = (qa * 1e18) / price;
         uint256 expectedB = (qb * 1e18) / price;

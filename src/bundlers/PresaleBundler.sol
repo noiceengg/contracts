@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: BUSL-1.1
+ 
 pragma solidity ^0.8.24;
 
 import { SafeTransferLib, ERC20 } from "@solmate/utils/SafeTransferLib.sol";
 
 import { AirlockWithVesting, CreateWithVestingParams } from "src/AirlockWithVesting.sol";
-import { SimpleLinearVesting } from "src/vesting/SimpleLinearVesting.sol";
+import { IVestingFactory } from "src/vesting/IVestingFactory.sol";
 
 error PresaleOverAllocation();
 
@@ -19,9 +19,21 @@ contract PresaleBundler {
     event QuoteForwarded(address indexed token, address indexed recipient, uint256 amount);
 
     AirlockWithVesting public immutable airlock;
+    address public expectedNumeraire;
+    address public vestingFactory;
 
     constructor(AirlockWithVesting airlock_) {
         airlock = airlock_;
+    }
+
+    function setExpectedNumeraire(address numeraire) external {
+        require(msg.sender == airlock.owner(), "not owner");
+        expectedNumeraire = numeraire;
+    }
+
+    function setVestingFactory(address factory) external {
+        require(msg.sender == airlock.owner(), "not owner");
+        vestingFactory = factory;
     }
 
     function launchAndDistribute(
@@ -34,6 +46,9 @@ contract PresaleBundler {
         address quoteRecipient
     ) external returns (address asset) {
         require(p.presaleDistributor == address(this), "presaleDistributor != bundler");
+        if (expectedNumeraire != address(0)) {
+            require(p.numeraire == expectedNumeraire, "unexpected numeraire");
+        }
         (asset,,,,) = airlock.createWithVesting(
             CreateWithVestingParams({
                 initialSupply: p.initialSupply,
@@ -61,11 +76,8 @@ contract PresaleBundler {
         uint256 length = participants.length;
         for (uint256 i; i < length; ++i) {
             PresaleParticipant calldata sp = participants[i];
-            if (p.numeraire == address(0)) {
-                revert("native numeraire unsupported");
-            } else {
-                ERC20(p.numeraire).safeTransferFrom(sp.account, address(this), sp.quoteAmount);
-            }
+            require(p.numeraire != address(0), "native numeraire unsupported");
+            ERC20(p.numeraire).safeTransferFrom(sp.account, address(this), sp.quoteAmount);
             uint256 assetOut = (sp.quoteAmount * 1e18) / priceWad;
             totalAssetNeeded += assetOut;
         }
@@ -74,9 +86,16 @@ contract PresaleBundler {
         for (uint256 i; i < length; ++i) {
             PresaleParticipant calldata sp = participants[i];
             uint256 assetOut = (sp.quoteAmount * 1e18) / priceWad;
-            SimpleLinearVesting vest = new SimpleLinearVesting(asset, sp.account, vestStart, vestDuration);
-            ERC20(asset).safeTransfer(address(vest), assetOut);
-            emit PresaleVestingCreated(asset, sp.account, address(vest), assetOut);
+            require(vestingFactory != address(0), "vesting factory not set");
+            ERC20(asset).safeTransfer(vestingFactory, assetOut);
+            address vestingAddr = IVestingFactory(vestingFactory).create(
+                asset,
+                sp.account,
+                uint128(assetOut),
+                vestStart,
+                vestDuration
+            );
+            emit PresaleVestingCreated(asset, sp.account, vestingAddr, assetOut);
         }
         if (p.numeraire != address(0)) {
             uint256 totalQuote = ERC20(p.numeraire).balanceOf(address(this));
