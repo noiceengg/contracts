@@ -1,0 +1,41 @@
+{
+  "lib/forge-std": {
+    "rev": "d3db4ef90a72b7d24aa5a2e5c649593eaef7801d"
+  },
+  "lib/lockup": {
+    "tag": {
+      "name": "v2.0.1",
+      "rev": "baf9a9e304c2d268a75bc8c363154c7f3f14cd45"
+    }
+  },
+  "lib/openzeppelin-contracts": {
+    "tag": {
+      "name": "v5.0.2",
+      "rev": "dbb6104ce834628e473d2173bbc9d47f81a9eec3"
+    }
+  },
+  "lib/prb-math": {
+    "tag": {
+      "name": "v4.1.0",
+      "rev": "280fc5f77e1b21b9c54013aac51966be33f4a410"
+    }
+  },
+  "lib/solady": {
+    "rev": "513f581675374706dbe947284d6b12d19ce35a2a"
+  },
+  "lib/universal-router": {
+    "rev": "3fc2b48b66a43d7da649809b301dfb271779b0b5"
+  },
+  "lib/v3-core": {
+    "rev": "e3589b192d0be27e100cd0daaf6c97204fdb1899"
+  },
+  "lib/v3-periphery": {
+    "rev": "80f26c86c57b8a5e4b913f42844d4c8bd274d058"
+  },
+  "lib/v4-core": {
+    "rev": "80311e34080fee64b6fc6c916e9a51a437d0e482"
+  },
+  "lib/v4-periphery": {
+    "rev": "9628c36b4f5083d19606e63224e4041fe748edae"
+  }
+}
