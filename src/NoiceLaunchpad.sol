@@ -34,40 +34,26 @@ struct BundleWithVestingParams {
 contract NoiceLaunchpad {
     using SafeTransferLib for address;
 
-    /// @notice Address of the Airlock contract
     Airlock public immutable airlock;
-
-    /// @notice Address of the Universal Router contract
     UniversalRouter public immutable router;
-
-    /// @notice Address of the Sablier Lockup contract (Base mainnet)
     ISablierLockup public immutable sablierLockup;
+    address public immutable NOICE_TOKEN;
+    uint256 public immutable CREATOR_VESTING_PERCENTAGE;
 
-    /// @notice NOICE token address on Base mainnet
-    address public constant NOICE_TOKEN =
-        0x9Cb41FD9dC6891BAe8187029461bfAADF6CC0C69;
-
-    /// @notice Sablier Lockup Linear address on Base mainnet
-    address public constant SABLIER_LOCKUP_LINEAR =
-        0xb5D78DD3276325f5FAF3106Cc4Acc56E28e0Fe3B;
-
-    /// @notice Creator vesting allocation percentage (45%)
-    uint256 public constant CREATOR_VESTING_PERCENTAGE = 45;
-
-    /**
-     * @param airlock_ Immutable address of the Airlock contract
-     * @param router_ Immutable address of the Universal Router contract
-     * @param sablierLockup_ Immutable address of the Sablier Lockup contract
-     */
     constructor(
         Airlock airlock_,
         UniversalRouter router_,
-        ISablierLockup sablierLockup_
+        ISablierLockup sablierLockup_,
+        address noiceToken_,
+        uint256 creatorVestingPercentage_
     ) {
         if (
             address(airlock_) == address(0) ||
             address(router_) == address(0) ||
-            address(sablierLockup_) == address(0)
+            address(sablierLockup_) == address(0) ||
+            noiceToken_ == address(0) ||
+            creatorVestingPercentage_ == 0 ||
+            creatorVestingPercentage_ > 100
         ) {
             revert InvalidAddresses();
         }
@@ -75,6 +61,8 @@ contract NoiceLaunchpad {
         airlock = airlock_;
         router = router_;
         sablierLockup = sablierLockup_;
+        NOICE_TOKEN = noiceToken_;
+        CREATOR_VESTING_PERCENTAGE = creatorVestingPercentage_;
     }
 
     /**
@@ -123,13 +111,13 @@ contract NoiceLaunchpad {
     }
 
     /**
-     * @notice Calculates the creator vesting allocation (45% of total supply)
+     * @notice Calculates the creator vesting allocation
      * @param totalSupply Total supply of the token
      * @return vestingAmount Amount allocated for creator vesting
      */
     function _calculateVestingAllocation(
         uint256 totalSupply
-    ) private pure returns (uint256) {
+    ) private view returns (uint256) {
         return (totalSupply * CREATOR_VESTING_PERCENTAGE) / 100;
     }
 
