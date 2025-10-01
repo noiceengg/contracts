@@ -19,6 +19,14 @@ struct VestingParams {
     uint40 creatorVestingEndTimestamp;
 }
 
+/**
+ * @dev Presale participant configuration
+ * @param lockedAddress Address holding NOICE tokens to be locked
+ * @param noiceAmount Amount of NOICE to lock (determines pro-rata share)
+ * @param vestingStartTimestamp Vesting start time
+ * @param vestingEndTimestamp Vesting end time
+ * @param vestingRecipient Address receiving vested tokens
+ */
 struct PresaleParticipant {
     address lockedAddress;
     uint256 noiceAmount;
@@ -38,8 +46,10 @@ struct BundleWithVestingParams {
 
 /**
  * @title NoiceLaunchpad
- * @notice Bundler for NoiceLaunchpad with creator vesting functionality
- * @dev Allocates 45% of tokens to creator with linear vesting via Sablier
+ * @notice Bundler for NoiceLaunchpad with creator vesting and presale functionality
+ * @dev Token allocation: 45% creator vesting + 55% available (presale + LP)
+ * @dev Creator vesting: Linear unlock via Sablier
+ * @dev Presale: Pro-rata distribution based on NOICE locked
  * @custom:security-contact v@noice.so
  */
 contract NoiceLaunchpad {
@@ -137,6 +147,7 @@ contract NoiceLaunchpad {
 
     /**
      * @notice Calculates the creator vesting allocation
+     * @dev vestingAmount = (totalSupply * percentage) / 100
      * @param totalSupply Total supply of the token
      * @return vestingAmount Amount allocated for creator vesting
      */
@@ -191,10 +202,11 @@ contract NoiceLaunchpad {
 
     /**
      * @notice Executes presale by collecting NOICE, swapping for tokens, and distributing to participants
+     * @dev Pro-rata allocation: participantShare = (totalTokens * participantNoice) / totalNoice
      * @param asset Address of the newly created token
      * @param participants Array of presale participants
-     * @param presaleCommands Router commands for NOICE → asset swap
-     * @param presaleInputs Router inputs for NOICE → asset swap
+     * @param presaleCommands Router commands for swap
+     * @param presaleInputs Router inputs for swap
      */
     function _executePresale(
         address asset,
@@ -204,7 +216,6 @@ contract NoiceLaunchpad {
     ) private {
         uint256 totalNoice = 0;
 
-        // 1. Collect all NOICE from participants
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i].noiceAmount > 0) {
                 IERC20(NOICE_TOKEN).transferFrom(
@@ -215,7 +226,6 @@ contract NoiceLaunchpad {
                 totalNoice += participants[i].noiceAmount;
             }
 
-            // Validate vesting timestamps
             if (
                 participants[i].vestingStartTimestamp >=
                 participants[i].vestingEndTimestamp
@@ -226,24 +236,19 @@ contract NoiceLaunchpad {
 
         if (totalNoice == 0) return;
 
-        // 2. Get initial asset balance
         uint256 assetBalanceBefore = IERC20(asset).balanceOf(address(this));
 
-        // 3. Approve router to spend NOICE
         IERC20(NOICE_TOKEN).approve(address(router), totalNoice);
 
-        // 4. Execute swap via router (exact input: NOICE → asset)
         if (presaleCommands.length > 0) {
             router.execute(presaleCommands, presaleInputs);
         }
 
-        // 5. Calculate tokens received from swap
         uint256 assetBalanceAfter = IERC20(asset).balanceOf(address(this));
         uint256 totalTokensReceived = assetBalanceAfter - assetBalanceBefore;
 
         if (totalTokensReceived == 0) return;
 
-        // 6. Distribute tokens proportionally via vesting streams
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i].noiceAmount > 0) {
                 uint256 participantShare = (totalTokensReceived * participants[i].noiceAmount) / totalNoice;
