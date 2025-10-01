@@ -6,6 +6,7 @@ import { Create2 } from "@openzeppelin/utils/Create2.sol";
 import { Commands } from "@universal-router/libraries/Commands.sol";
 import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
 import { IQuoterV2 } from "@v3-periphery/interfaces/IQuoterV2.sol";
+import { IV4Quoter } from "@v4-periphery/interfaces/IV4Quoter.sol";
 import { Airlock, ModuleState } from "src/Airlock.sol";
 import { ITokenFactory, TokenFactory } from "src/TokenFactory.sol";
 import { IGovernanceFactory } from "src/interfaces/IGovernanceFactory.sol";
@@ -19,6 +20,7 @@ import { Bundler } from "src/Bundler.sol";
 address payable constant airlock = payable(0x77EbfBAE15AD200758E9E2E61597c0B07d731254);
 address payable constant ur = payable(0xEf740bf23aCaE26f6492B10de645D6B98dC8Eaf3);
 address constant quoterV2 = 0x385A5cf5F83e99f7BB2852b6A19C3538b9FA7658;
+address constant v4Quoter = address(0x1234); // Placeholder for V4 Quoter
 address constant weth = 0x4200000000000000000000000000000000000006;
 
 contract BundlerTest is Test {
@@ -29,7 +31,7 @@ contract BundlerTest is Test {
 
     function setUp() public {
         vm.createSelectFork(vm.envString("UNICHAIN_MAINNET_RPC_URL"), 10_594_210);
-        bundler = new Bundler(Airlock(airlock), UniversalRouter(ur), IQuoterV2(quoterV2));
+        bundler = new Bundler(Airlock(airlock), UniversalRouter(ur), IQuoterV2(quoterV2), IV4Quoter(v4Quoter));
 
         tokenFactory = new TokenFactory(airlock);
         vm.prank(Airlock(airlock).owner());
