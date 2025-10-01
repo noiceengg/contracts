@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {NoiceLaunchpad, BundleWithVestingParams, VestingParams, InvalidAddresses, InvalidVestingTimestamps} from "src/NoiceLaunchpad.sol";
+import {NoiceLaunchpad, BundleWithVestingParams, VestingParams, PresaleParticipant, InvalidAddresses, InvalidVestingTimestamps, TooManyPresaleParticipants} from "src/NoiceLaunchpad.sol";
 import {Airlock, CreateParams} from "src/Airlock.sol";
 import {UniversalRouter} from "@universal-router/UniversalRouter.sol";
 import {ISablierLockup} from "@sablier/v2-core/interfaces/ISablierLockup.sol";
@@ -242,11 +242,15 @@ contract NoiceLaunchpadSimpleTest is Test {
             createData: createData,
             vestingParams: vestingParams,
             commands: "",
-            inputs: new bytes[](0)
+            inputs: new bytes[](0),
+            presaleCommands: "",
+            presaleInputs: new bytes[](0)
         });
 
+        PresaleParticipant[] memory participants = new PresaleParticipant[](0);
+
         vm.expectRevert(InvalidVestingTimestamps.selector);
-        launchpad.bundleWithCreatorVesting(params);
+        launchpad.bundleWithCreatorVesting(params, participants);
     }
 
     function testSablierIntegrationDirect() public {
@@ -414,11 +418,15 @@ contract NoiceLaunchpadSimpleTest is Test {
             createData: createData,
             vestingParams: vestingParams,
             commands: "",
-            inputs: new bytes[](0)
+            inputs: new bytes[](0),
+            presaleCommands: "",
+            presaleInputs: new bytes[](0)
         });
 
+        PresaleParticipant[] memory participants = new PresaleParticipant[](0);
+
         uint256 launchpadEthBefore = address(launchpadWithMock).balance;
-        launchpadWithMock.bundleWithCreatorVesting{value: 1 ether}(params);
+        launchpadWithMock.bundleWithCreatorVesting{value: 1 ether}(params, participants);
 
         uint256 expectedVestingAmount = (INITIAL_SUPPLY * 45) / 100;
         uint256 expectedSaleAmount = INITIAL_SUPPLY - expectedVestingAmount;
@@ -461,11 +469,15 @@ contract NoiceLaunchpadSimpleTest is Test {
             createData: createData,
             vestingParams: vestingParams,
             commands: "",
-            inputs: new bytes[](0)
+            inputs: new bytes[](0),
+            presaleCommands: "",
+            presaleInputs: new bytes[](0)
         });
 
+        PresaleParticipant[] memory participants = new PresaleParticipant[](0);
+
         vm.recordLogs();
-        launchpadWithMock.bundleWithCreatorVesting{value: 1 ether}(params);
+        launchpadWithMock.bundleWithCreatorVesting{value: 1 ether}(params, participants);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 streamId;
@@ -529,6 +541,164 @@ contract NoiceLaunchpadSimpleTest is Test {
         assertTrue(sablierLockup.isDepleted(streamId));
 
         console2.log("Vesting unlock test completed successfully");
+    }
+
+    function testPresaleTooManyParticipants() public {
+        PresaleParticipant[] memory participants = new PresaleParticipant[](101);
+        for (uint256 i = 0; i < 101; i++) {
+            participants[i] = PresaleParticipant({
+                lockedAddress: makeAddr(string(abi.encodePacked("participant", i))),
+                noiceAmount: 1000e18,
+                vestingStartTimestamp: uint40(block.timestamp + 1 days),
+                vestingEndTimestamp: uint40(block.timestamp + 365 days),
+                vestingRecipient: makeAddr(string(abi.encodePacked("recipient", i)))
+            });
+        }
+
+        CreateParams memory createData = _getMinimalCreateParams();
+        VestingParams memory vestingParams = VestingParams({
+            creatorVestingStartTimestamp: uint40(block.timestamp + 1 days),
+            creatorVestingEndTimestamp: uint40(block.timestamp + 365 days)
+        });
+
+        BundleWithVestingParams memory params = BundleWithVestingParams({
+            createData: createData,
+            vestingParams: vestingParams,
+            commands: "",
+            inputs: new bytes[](0),
+            presaleCommands: "",
+            presaleInputs: new bytes[](0)
+        });
+
+        vm.expectRevert(TooManyPresaleParticipants.selector);
+        launchpadWithMock.bundleWithCreatorVesting(params, participants);
+    }
+
+    function testPresaleInvalidVestingTimestamps() public {
+        address participant1 = makeAddr("participant1");
+
+        PresaleParticipant[] memory participants = new PresaleParticipant[](1);
+        participants[0] = PresaleParticipant({
+            lockedAddress: participant1,
+            noiceAmount: 1000e18,
+            vestingStartTimestamp: uint40(block.timestamp + 365 days),
+            vestingEndTimestamp: uint40(block.timestamp + 1 days),
+            vestingRecipient: participant1
+        });
+
+        CreateParams memory createData = _getMinimalCreateParams();
+        VestingParams memory vestingParams = VestingParams({
+            creatorVestingStartTimestamp: uint40(block.timestamp + 1 days),
+            creatorVestingEndTimestamp: uint40(block.timestamp + 365 days)
+        });
+
+        BundleWithVestingParams memory params = BundleWithVestingParams({
+            createData: createData,
+            vestingParams: vestingParams,
+            commands: "",
+            inputs: new bytes[](0),
+            presaleCommands: "",
+            presaleInputs: new bytes[](0)
+        });
+
+        deal(NOICE_TOKEN, participant1, 1000e18);
+        vm.prank(participant1);
+        IERC20(NOICE_TOKEN).approve(address(launchpadWithMock), 1000e18);
+
+        vm.expectRevert(InvalidVestingTimestamps.selector);
+        launchpadWithMock.bundleWithCreatorVesting(params, participants);
+    }
+
+    function testPresaleWithMultipleParticipants() public {
+        address participant1 = makeAddr("participant1");
+        address participant2 = makeAddr("participant2");
+        address participant3 = makeAddr("participant3");
+
+        // Setup presale participants with different NOICE amounts
+        PresaleParticipant[] memory participants = new PresaleParticipant[](3);
+        participants[0] = PresaleParticipant({
+            lockedAddress: participant1,
+            noiceAmount: 5000e18,  // 50%
+            vestingStartTimestamp: uint40(block.timestamp + 1 days),
+            vestingEndTimestamp: uint40(block.timestamp + 365 days),
+            vestingRecipient: participant1
+        });
+        participants[1] = PresaleParticipant({
+            lockedAddress: participant2,
+            noiceAmount: 3000e18,  // 30%
+            vestingStartTimestamp: uint40(block.timestamp + 1 days),
+            vestingEndTimestamp: uint40(block.timestamp + 365 days),
+            vestingRecipient: participant2
+        });
+        participants[2] = PresaleParticipant({
+            lockedAddress: participant3,
+            noiceAmount: 2000e18,  // 20%
+            vestingStartTimestamp: uint40(block.timestamp + 1 days),
+            vestingEndTimestamp: uint40(block.timestamp + 365 days),
+            vestingRecipient: participant3
+        });
+
+        // Fund participants with NOICE
+        deal(NOICE_TOKEN, participant1, 5000e18);
+        deal(NOICE_TOKEN, participant2, 3000e18);
+        deal(NOICE_TOKEN, participant3, 2000e18);
+
+        // Approve launchpad to spend NOICE
+        vm.prank(participant1);
+        IERC20(NOICE_TOKEN).approve(address(launchpadWithMock), 5000e18);
+        vm.prank(participant2);
+        IERC20(NOICE_TOKEN).approve(address(launchpadWithMock), 3000e18);
+        vm.prank(participant3);
+        IERC20(NOICE_TOKEN).approve(address(launchpadWithMock), 2000e18);
+
+        CreateParams memory createData = _getMinimalCreateParams();
+        createData.governanceFactory = IGovernanceFactory(address(governanceFactory));
+
+        VestingParams memory vestingParams = VestingParams({
+            creatorVestingStartTimestamp: uint40(block.timestamp + 1 days),
+            creatorVestingEndTimestamp: uint40(block.timestamp + 365 days)
+        });
+
+        BundleWithVestingParams memory params = BundleWithVestingParams({
+            createData: createData,
+            vestingParams: vestingParams,
+            commands: "",
+            inputs: new bytes[](0),
+            presaleCommands: "",
+            presaleInputs: new bytes[](0)
+        });
+
+        // Execute bundle with presale
+        launchpadWithMock.bundleWithCreatorVesting(params, participants);
+
+        // Verify NOICE was transferred from participants
+        assertEq(IERC20(NOICE_TOKEN).balanceOf(participant1), 0, "Participant 1 NOICE not transferred");
+        assertEq(IERC20(NOICE_TOKEN).balanceOf(participant2), 0, "Participant 2 NOICE not transferred");
+        assertEq(IERC20(NOICE_TOKEN).balanceOf(participant3), 0, "Participant 3 NOICE not transferred");
+    }
+
+    function testPresaleEmptyParticipantsArray() public {
+        PresaleParticipant[] memory participants = new PresaleParticipant[](0);
+
+        CreateParams memory createData = _getMinimalCreateParams();
+        createData.governanceFactory = IGovernanceFactory(address(governanceFactory));
+
+        VestingParams memory vestingParams = VestingParams({
+            creatorVestingStartTimestamp: uint40(block.timestamp + 1 days),
+            creatorVestingEndTimestamp: uint40(block.timestamp + 365 days)
+        });
+
+        BundleWithVestingParams memory params = BundleWithVestingParams({
+            createData: createData,
+            vestingParams: vestingParams,
+            commands: "",
+            inputs: new bytes[](0),
+            presaleCommands: "",
+            presaleInputs: new bytes[](0)
+        });
+
+        // Should not revert with empty array
+        launchpadWithMock.bundleWithCreatorVesting(params, participants);
     }
 
     function _getMinimalCreateParams()

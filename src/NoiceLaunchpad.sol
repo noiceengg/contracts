@@ -12,10 +12,19 @@ import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 error InvalidAddresses();
 error InvalidVestingTimestamps();
 error InsufficientTokenBalance();
+error TooManyPresaleParticipants();
 
 struct VestingParams {
     uint40 creatorVestingStartTimestamp;
     uint40 creatorVestingEndTimestamp;
+}
+
+struct PresaleParticipant {
+    address lockedAddress;
+    uint256 noiceAmount;
+    uint40 vestingStartTimestamp;
+    uint40 vestingEndTimestamp;
+    address vestingRecipient;
 }
 
 struct BundleWithVestingParams {
@@ -23,6 +32,8 @@ struct BundleWithVestingParams {
     VestingParams vestingParams;
     bytes commands;
     bytes[] inputs;
+    bytes presaleCommands;
+    bytes[] presaleInputs;
 }
 
 /**
@@ -66,12 +77,17 @@ contract NoiceLaunchpad {
     }
 
     /**
-     * @notice Bundles token creation with 45% creator vesting
+     * @notice Bundles token creation with 45% creator vesting and optional presale
      * @param params Bundle parameters containing creation data, vesting info, and router commands
+     * @param presaleParticipants Array of presale participants (max 100)
      */
     function bundleWithCreatorVesting(
-        BundleWithVestingParams calldata params
+        BundleWithVestingParams calldata params,
+        PresaleParticipant[] calldata presaleParticipants
     ) external payable {
+        if (presaleParticipants.length > 100) {
+            revert TooManyPresaleParticipants();
+        }
         if (
             params.vestingParams.creatorVestingStartTimestamp >=
             params.vestingParams.creatorVestingEndTimestamp
@@ -104,6 +120,15 @@ contract NoiceLaunchpad {
                 creatorVestingAmount,
                 params.vestingParams.creatorVestingStartTimestamp,
                 params.vestingParams.creatorVestingEndTimestamp
+            );
+        }
+
+        if (presaleParticipants.length > 0) {
+            _executePresale(
+                asset,
+                presaleParticipants,
+                params.presaleCommands,
+                params.presaleInputs
             );
         }
 
@@ -142,6 +167,117 @@ contract NoiceLaunchpad {
         }
 
         IERC20(asset).approve(address(sablierLockup), amount);
+        Lockup.CreateWithTimestamps memory params = Lockup
+            .CreateWithTimestamps({
+                sender: address(this),
+                recipient: recipient,
+                totalAmount: uint128(amount),
+                token: IERC20(asset),
+                cancelable: true,
+                transferable: true,
+                timestamps: Lockup.Timestamps({
+                    start: startTimestamp,
+                    end: endTimestamp
+                }),
+                shape: "linear",
+                broker: Broker({account: address(0), fee: UD60x18.wrap(0)})
+            });
+
+        LockupLinear.UnlockAmounts memory unlockAmounts = LockupLinear
+            .UnlockAmounts({start: 0, cliff: 0});
+
+        sablierLockup.createWithTimestampsLL(params, unlockAmounts, 0);
+    }
+
+    /**
+     * @notice Executes presale by collecting NOICE, swapping for tokens, and distributing to participants
+     * @param asset Address of the newly created token
+     * @param participants Array of presale participants
+     * @param presaleCommands Router commands for NOICE → asset swap
+     * @param presaleInputs Router inputs for NOICE → asset swap
+     */
+    function _executePresale(
+        address asset,
+        PresaleParticipant[] calldata participants,
+        bytes calldata presaleCommands,
+        bytes[] calldata presaleInputs
+    ) private {
+        uint256 totalNoice = 0;
+
+        // 1. Collect all NOICE from participants
+        for (uint256 i = 0; i < participants.length; i++) {
+            if (participants[i].noiceAmount > 0) {
+                IERC20(NOICE_TOKEN).transferFrom(
+                    participants[i].lockedAddress,
+                    address(this),
+                    participants[i].noiceAmount
+                );
+                totalNoice += participants[i].noiceAmount;
+            }
+
+            // Validate vesting timestamps
+            if (
+                participants[i].vestingStartTimestamp >=
+                participants[i].vestingEndTimestamp
+            ) {
+                revert InvalidVestingTimestamps();
+            }
+        }
+
+        if (totalNoice == 0) return;
+
+        // 2. Get initial asset balance
+        uint256 assetBalanceBefore = IERC20(asset).balanceOf(address(this));
+
+        // 3. Approve router to spend NOICE
+        IERC20(NOICE_TOKEN).approve(address(router), totalNoice);
+
+        // 4. Execute swap via router (exact input: NOICE → asset)
+        if (presaleCommands.length > 0) {
+            router.execute(presaleCommands, presaleInputs);
+        }
+
+        // 5. Calculate tokens received from swap
+        uint256 assetBalanceAfter = IERC20(asset).balanceOf(address(this));
+        uint256 totalTokensReceived = assetBalanceAfter - assetBalanceBefore;
+
+        if (totalTokensReceived == 0) return;
+
+        // 6. Distribute tokens proportionally via vesting streams
+        for (uint256 i = 0; i < participants.length; i++) {
+            if (participants[i].noiceAmount > 0) {
+                uint256 participantShare = (totalTokensReceived * participants[i].noiceAmount) / totalNoice;
+
+                if (participantShare > 0) {
+                    _createPresaleVestingStream(
+                        asset,
+                        participants[i].vestingRecipient,
+                        participantShare,
+                        participants[i].vestingStartTimestamp,
+                        participants[i].vestingEndTimestamp
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * @notice Creates a vesting stream for a presale participant
+     * @param asset Address of the token to vest
+     * @param recipient Address of the vesting recipient
+     * @param amount Amount of tokens to vest
+     * @param startTimestamp Start timestamp for vesting
+     * @param endTimestamp End timestamp for vesting
+     */
+    function _createPresaleVestingStream(
+        address asset,
+        address recipient,
+        uint256 amount,
+        uint40 startTimestamp,
+        uint40 endTimestamp
+    ) private {
+        IERC20(asset).approve(address(sablierLockup), amount);
+
         Lockup.CreateWithTimestamps memory params = Lockup
             .CreateWithTimestamps({
                 sender: address(this),
