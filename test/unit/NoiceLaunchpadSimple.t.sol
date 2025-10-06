@@ -155,9 +155,9 @@ contract NoiceLaunchpadSimpleTest is Test {
     }
 
     function testConstructor() public view {
-        assertEq(address(launchpad.airlock()), airlock);
-        assertEq(address(launchpad.router()), router);
-        assertEq(address(launchpad.sablierLockup()), address(sablierLockup));
+        assertEq(address(launchpad.AIRLOCK()), airlock);
+        assertEq(address(launchpad.ROUTER()), router);
+        assertEq(address(launchpad.SABLIER_LOCKUP()), address(sablierLockup));
         assertEq(launchpad.NOICE_TOKEN(), NOICE_TOKEN);
         assertEq(launchpad.CREATOR_VESTING_PERCENTAGE(), CREATOR_VESTING_PERCENTAGE);
     }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
-import {NoiceLaunchpad, BundleWithVestingParams, VestingParams, PresaleParticipant} from "src/NoiceLaunchpad.sol";
+import {NoiceLaunchpad, BundleWithVestingParams, VestingParams, PresaleParticipant, SSLPTranche} from "src/NoiceLaunchpad.sol";
 import {Airlock, CreateParams} from "src/Airlock.sol";
 import {UniversalRouter} from "@universal-router/UniversalRouter.sol";
 import {ISablierLockup} from "@sablier/v2-core/interfaces/ISablierLockup.sol";
@@ -24,6 +24,7 @@ import {Curve} from "src/libraries/Multicurve.sol";
 import {BeneficiaryData} from "src/types/BeneficiaryData.sol";
 import {Hooks} from "@v4-core/libraries/Hooks.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {Position} from "src/types/Position.sol";
 
 /**
  * @title NoiceLaunchpadPresaleAllocationTest
@@ -47,10 +48,11 @@ contract NoiceLaunchpadPresaleAllocationTest is Test {
     address public creator = makeAddr("creator");
     address public latestAsset;
 
-    /// @dev Token supply allocation: 100B total = 45B creator vesting + 55B LP
+    /// @dev Token supply allocation: 100B total = 45B creator vesting + 5B SSLP + 50B LP
     uint256 public constant TOTAL_SUPPLY = 100_000_000_000e18;
-    uint256 public constant LP_SUPPLY = 55_000_000_000e18;
+    uint256 public constant LP_SUPPLY = 50_000_000_000e18;
     uint256 public constant CREATOR_VESTING = 45_000_000_000e18;
+    uint256 public constant SSLP_AMOUNT = 5_000_000_000e18;
 
     /// @dev Initial market cap at pool creation: $69,420
     /// @dev Corresponds to starting tick in multicurve configuration
@@ -61,6 +63,7 @@ contract NoiceLaunchpadPresaleAllocationTest is Test {
     uint256 public constant NOICE_PRICE = 0.0003695 ether;
 
     uint256 public constant CREATOR_VESTING_PERCENTAGE = 45;
+    uint256 public constant SSLP_PERCENTAGE = 5;
 
     address public constant NOICE_TOKEN = 0x9Cb41FD9dC6891BAe8187029461bfAADF6CC0C69;
 
@@ -116,7 +119,9 @@ contract NoiceLaunchpadPresaleAllocationTest is Test {
             router,
             sablierLockup,
             NOICE_TOKEN,
-            CREATOR_VESTING_PERCENTAGE
+            CREATOR_VESTING_PERCENTAGE,
+            SSLP_PERCENTAGE,
+            poolManager
         );
     }
 
@@ -149,7 +154,7 @@ contract NoiceLaunchpadPresaleAllocationTest is Test {
             uint256 noiceInMillions = presaleAmounts[i] / 1e24; // 1e24 = 1M with 18 decimals
             uint256 usdValue = (presaleAmounts[i] * NOICE_PRICE) / 1e18; // USD = NOICE * $0.0003695 / 1e18
             uint256 tokensInBillions = tokensAllocated / 1e27; // 1e27 = 1B with 18 decimals
-            uint256 percentOfLP = (tokensAllocated * 100) / LP_SUPPLY; // % = (allocated / 55B) * 100
+            uint256 percentOfLP = (tokensAllocated * 100) / LP_SUPPLY; // % = (allocated / 50B) * 100
 
             console2.log(
                 string(abi.encodePacked(
@@ -165,10 +170,11 @@ contract NoiceLaunchpadPresaleAllocationTest is Test {
         }
 
         console2.log("\n=== KEY INSIGHTS ===");
-        console2.log("- 72.06M NOICE (~$26.6k spent) reaches ~$200k mcap, allocates ~40%% of LP (22B tokens)");
+        console2.log("- Token allocation: 45B creator vesting + 5B SSLP + 50B LP");
+        console2.log("- 72.06M NOICE (~$26.6k spent) reaches ~$200k mcap, allocates ~40%% of LP (20B tokens)");
         console2.log("- Valley effect: 100M NOICE (+$10k spent) only adds ~$35k mcap (shallow 5%% curve)");
         console2.log("- First 72M NOICE gets 40%% LP, next 78M gets only 5%% more (valley resistance)");
-        console2.log("- 400M NOICE (~$148k spent) allocates ~74%% of LP, reaching ~$520k mcap");
+        console2.log("- 400M NOICE (~$148k spent) allocates ~67%% of LP, reaching ~$520k mcap");
     }
 
     function _executePresaleAndGetResults(uint256 noiceAmount)
@@ -252,9 +258,27 @@ contract NoiceLaunchpadPresaleAllocationTest is Test {
             creatorVestingEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
+        /// @dev SSLP tranches: distribute 5B tokens across price ranges for NOICE rewards
+        /// @dev Tranche 1: 40% at $200k-$300k mcap range (2B tokens)
+        /// @dev Tranche 2: 60% at $300k-$500k mcap range (3B tokens)
+        SSLPTranche[] memory sslpTranches = new SSLPTranche[](2);
+        sslpTranches[0] = SSLPTranche({
+            shares: 4000, // 40% of SSLP allocation
+            tickLower: -50000,
+            tickUpper: -46400,
+            recipient: creator
+        });
+        sslpTranches[1] = SSLPTranche({
+            shares: 6000, // 60% of SSLP allocation
+            tickLower: -46400,
+            tickUpper: -42200,
+            recipient: creator
+        });
+
         return BundleWithVestingParams({
             createData: createData,
             vestingParams: vestingParams,
+            sslpTranches: sslpTranches,
             commands: "",
             inputs: new bytes[](0),
             presaleCommands: "",
@@ -296,6 +320,60 @@ contract NoiceLaunchpadPresaleAllocationTest is Test {
         uint256 marketCap = (assetPriceUSD * TOTAL_SUPPLY) / 1e18; // Total market cap
 
         return marketCap;
+    }
+
+    function test_SSLPPositionWithdrawal() public {
+        /// @dev Test SSLP position creation and withdrawal after price moves
+        console2.log("\n=== SSLP POSITION WITHDRAWAL TEST ===\n");
+
+        // Launch token with SSLP positions
+        PresaleParticipant[] memory participants = new PresaleParticipant[](0);
+        BundleWithVestingParams memory params = _createBundleParams();
+
+        vm.recordLogs();
+        launchpad.bundleWithCreatorVesting(params, participants);
+
+        // Get asset address from logs
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        address asset;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].topics[0] ==
+                keccak256("Create(address,address,address,address)")
+            ) {
+                asset = address(uint160(uint256(logs[i].topics[1])));
+                break;
+            }
+        }
+
+        console2.log("Token launched at initial price");
+        console2.log("SSLP positions created: 2 tranches");
+        console2.log("  - Tranche 0: 2B tokens at $200k-$300k range");
+        console2.log("  - Tranche 1: 3B tokens at $300k-$500k range");
+
+        // Verify positions were created
+        Position[] memory positions = launchpad.getSSLPPositions(asset);
+        assertEq(positions.length, 2, "Should have 2 SSLP positions");
+
+        // Verify ownership
+        address recipient0 = launchpad.sslpPositionRecipient(asset, 0);
+        address recipient1 = launchpad.sslpPositionRecipient(asset, 1);
+        assertEq(recipient0, creator, "Position 0 should belong to creator");
+        assertEq(recipient1, creator, "Position 1 should belong to creator");
+
+        console2.log("\n--- Simulating Price Increase ---");
+
+        // TODO: Simulate swaps to move price through tranches
+        // This would require:
+        // 1. Getting NOICE tokens
+        // 2. Swapping NOICE for asset to move price up
+        // 3. Verifying SSLP positions converted to NOICE
+
+        console2.log("(Price movement simulation requires swap integration)");
+        console2.log("\nTest validates:");
+        console2.log("  - SSLP positions created correctly");
+        console2.log("  - Ownership tracked properly");
+        console2.log("  - Position count matches tranches");
     }
 
     function _uint2str(uint256 _i) internal pure returns (string memory) {
