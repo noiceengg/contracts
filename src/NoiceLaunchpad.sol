@@ -1,45 +1,69 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
-import {SafeTransferLib} from "@solady/utils/SafeTransferLib.sol";
-import {Airlock, CreateParams, AssetData} from "src/Airlock.sol";
-import {IPoolInitializer} from "src/interfaces/IPoolInitializer.sol";
-import {UniversalRouter} from "@universal-router/UniversalRouter.sol";
-import {ISablierLockup} from "@sablier/v2-core/interfaces/ISablierLockup.sol";
-import {Lockup, LockupLinear, Broker} from "@sablier/v2-core/types/DataTypes.sol";
-import {UD60x18} from "@prb/math/src/UD60x18.sol";
-import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {MiniV4Manager} from "src/base/MiniV4Manager.sol";
-import {IPoolManager} from "@v4-core/interfaces/IPoolManager.sol";
-import {Position} from "src/types/Position.sol";
-import {PoolKey} from "@v4-core/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "@v4-core/types/PoolId.sol";
-import {Currency} from "@v4-core/types/Currency.sol";
-import {StateLibrary} from "@v4-core/libraries/StateLibrary.sol";
-import {UniswapV4MulticurveInitializer} from "src/UniswapV4MulticurveInitializer.sol";
-import {BalanceDelta, BalanceDeltaLibrary} from "@v4-core/types/BalanceDelta.sol";
+import { SafeTransferLib } from "@solady/utils/SafeTransferLib.sol";
+import { Ownable } from "@solady/auth/Ownable.sol";
+import { Airlock, CreateParams, AssetData } from "src/Airlock.sol";
+import { IPoolInitializer } from "src/interfaces/IPoolInitializer.sol";
+import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
+import { ISablierLockup } from "@sablier/v2-core/interfaces/ISablierLockup.sol";
+import { ISablierBatchLockup } from "@sablier/v2-core/interfaces/ISablierBatchLockup.sol";
+import { Lockup, LockupLinear, Broker, BatchLockup } from "@sablier/v2-core/types/DataTypes.sol";
+import { UD60x18 } from "@prb/math/src/UD60x18.sol";
+import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
+import { MiniV4Manager } from "src/base/MiniV4Manager.sol";
+import { IPoolManager } from "@v4-core/interfaces/IPoolManager.sol";
+import { Position } from "src/types/Position.sol";
+import { PoolKey } from "@v4-core/types/PoolKey.sol";
+import { PoolId, PoolIdLibrary } from "@v4-core/types/PoolId.sol";
+import { Currency } from "@v4-core/types/Currency.sol";
+import { StateLibrary } from "@v4-core/libraries/StateLibrary.sol";
+import { TickMath } from "@v4-core/libraries/TickMath.sol";
+import { LiquidityAmounts } from "@v4-periphery/libraries/LiquidityAmounts.sol";
+import { UniswapV4MulticurveInitializer } from "src/UniswapV4MulticurveInitializer.sol";
+import { BalanceDelta, BalanceDeltaLibrary } from "@v4-core/types/BalanceDelta.sol";
 
-error InvalidAddresses();
-error InvalidVestingTimestamps();
-error InsufficientTokenBalance();
-error TooManyPresaleParticipants();
-error InvalidSSLPTranches();
-error InvalidPercentages();
-
-struct VestingParams {
-    uint40 creatorVestingStartTimestamp;
-    uint40 creatorVestingEndTimestamp;
+interface IPermit2 {
+    function approve(address token, address spender, uint160 amount, uint48 expiration) external;
 }
 
-/**
- * @dev Presale participant configuration
- * @param lockedAddress Address holding NOICE tokens to be locked
- * @param noiceAmount Amount of NOICE to lock (determines pro-rata share)
- * @param vestingStartTimestamp Vesting start time
- * @param vestingEndTimestamp Vesting end time
- * @param vestingRecipient Address receiving vested tokens
- */
-struct PresaleParticipant {
+/// @notice Thrown when constructor addresses are zero
+error InvalidAddresses();
+
+/// @notice Thrown when vesting timestamps are invalid (start >= end)
+error InvalidVestingTimestamps();
+
+/// @notice Thrown when contract has insufficient token balance
+error InsufficientTokenBalance();
+
+/// @notice Thrown when prebuy has more than 100 participants
+error TooManyNoicePrebuyParticipants();
+
+/// @notice Thrown when LP unlock tranche configuration is invalid
+error InvalidNoiceLpUnlockTranches();
+
+/// @notice Thrown when token allocation percentages are invalid
+error InvalidPercentages();
+
+/// @notice Creator allocation configuration
+/// @param recipient Address receiving allocated tokens
+/// @param amount Amount to allocate
+/// @param lockStartTimestamp Vesting start time
+/// @param lockEndTimestamp Vesting end time
+struct NoiceCreatorAllocation {
+    address recipient;
+    uint256 amount;
+    uint40 lockStartTimestamp;
+    uint40 lockEndTimestamp;
+}
+
+/// @notice Prebuy participant configuration
+/// @param lockedAddress Address holding NOICE tokens
+/// @param noiceAmount Amount of NOICE to contribute
+/// @param vestingStartTimestamp Vesting start time for received tokens
+/// @param vestingEndTimestamp Vesting end time for received tokens
+/// @param vestingRecipient Address receiving vested tokens
+struct NoicePrebuyParticipant {
     address lockedAddress;
     uint256 noiceAmount;
     uint40 vestingStartTimestamp;
@@ -47,40 +71,37 @@ struct PresaleParticipant {
     address vestingRecipient;
 }
 
-/**
- * @dev Single-sided liquidity position tranche for price-based NOICE rewards
- * @param shares Share of SSLP allocation (in basis points, sum must equal 10000)
- * @param tickLower Lower tick of the position range
- * @param tickUpper Upper tick of the position range
- * @param recipient Address that can claim accumulated NOICE from this tranche
- */
-struct SSLPTranche {
-    uint256 shares;
+/// @notice LP unlock position configuration
+/// @param amount Token amount for this tranche
+/// @param tickLower Lower tick boundary
+/// @param tickUpper Upper tick boundary
+/// @param recipient Address that can withdraw accumulated NOICE
+struct NoiceLpUnlockTranche {
+    uint256 amount;
     int24 tickLower;
     int24 tickUpper;
     address recipient;
 }
 
+/// @notice Complete bundle configuration for token launch
+/// @param createData Airlock configuration
+/// @param noiceCreatorAllocations Array of creator allocations
+/// @param noiceLpUnlockPercentage LP unlock allocation (basis points)
+/// @param noiceLpUnlockTranches LP unlock position configurations
+/// @param noicePrebuyCommands UniversalRouter commands for NOICE swap
+/// @param noicePrebuyInputs UniversalRouter inputs for NOICE swap
 struct BundleWithVestingParams {
     CreateParams createData;
-    VestingParams vestingParams;
-    SSLPTranche[] sslpTranches;
-    bytes commands;
-    bytes[] inputs;
-    bytes presaleCommands;
-    bytes[] presaleInputs;
+    NoiceCreatorAllocation[] noiceCreatorAllocations;
+    uint256 noiceLpUnlockPercentage;
+    NoiceLpUnlockTranche[] noiceLpUnlockTranches;
+    bytes noicePrebuyCommands;
+    bytes[] noicePrebuyInputs;
 }
 
-/**
- * @title NoiceLaunchpad
- * @notice Bundler for NoiceLaunchpad with creator vesting, SSLP, and presale functionality
- * @dev Token allocation: 45% creator vesting + 5% SSLP + 50% LP (presale + available)
- * @dev Creator vesting: Linear unlock via Sablier
- * @dev SSLP: Single-sided liquidity positions that earn NOICE as price increases
- * @dev Presale: Pro-rata distribution based on NOICE locked
- * @custom:security-contact v@noice.so
- */
-contract NoiceLaunchpad is MiniV4Manager {
+/// @title NoiceLaunchpad
+/// @notice Atomic token launch with creator vesting, LP unlock positions, and prebuy allocation
+contract NoiceLaunchpad is MiniV4Manager, Ownable {
     using SafeTransferLib for address;
     using BalanceDeltaLibrary for BalanceDelta;
     using StateLibrary for IPoolManager;
@@ -89,225 +110,191 @@ contract NoiceLaunchpad is MiniV4Manager {
     Airlock public immutable AIRLOCK;
     UniversalRouter public immutable ROUTER;
     ISablierLockup public immutable SABLIER_LOCKUP;
-    address public immutable NOICE_TOKEN;
-    uint256 public immutable CREATOR_VESTING_PERCENTAGE;
-    uint256 public immutable SSLP_PERCENTAGE;
+    ISablierBatchLockup public immutable SABLIER_BATCH_LOCKUP;
+    IPermit2 private constant PERMIT2 = IPermit2(0x000000000022D473030F116dDEE9F6B43aC78BA3);
 
-    /// @notice Tracks SSLP positions for each asset
-    mapping(address asset => Position[] positions) public sslpPositions;
-
-    /// @notice Maps position index to recipient for each asset
-    mapping(address asset => mapping(uint256 positionIndex => address recipient)) public sslpPositionRecipient;
-
-    /// @notice Tracks which positions have been withdrawn by index
-    mapping(address asset => mapping(uint256 positionIndex => bool withdrawn)) public sslpPositionWithdrawn;
+    mapping(address asset => Position[] positions) public noiceLpUnlockPositions;
+    mapping(address asset => mapping(uint256 positionIndex => address recipient)) public noiceLpUnlockPositionRecipient;
+    mapping(address asset => mapping(uint256 positionIndex => bool withdrawn)) public noiceLpUnlockPositionWithdrawn;
 
     constructor(
         Airlock airlock_,
         UniversalRouter router_,
         ISablierLockup sablierLockup_,
-        address noiceToken_,
-        uint256 creatorVestingPercentage_,
-        uint256 sslpPercentage_,
-        IPoolManager poolManager_
+        ISablierBatchLockup sablierBatchLockup_,
+        IPoolManager poolManager_,
+        address owner_
     ) MiniV4Manager(poolManager_) {
         if (
-            address(airlock_) == address(0) ||
-            address(router_) == address(0) ||
-            address(sablierLockup_) == address(0) ||
-            noiceToken_ == address(0)
+            address(airlock_) == address(0) || address(router_) == address(0) || address(sablierLockup_) == address(0)
+                || address(sablierBatchLockup_) == address(0) || owner_ == address(0)
         ) {
             revert InvalidAddresses();
-        }
-
-        if (
-            creatorVestingPercentage_ == 0 ||
-            creatorVestingPercentage_ + sslpPercentage_ > 100
-        ) {
-            revert InvalidPercentages();
         }
 
         AIRLOCK = airlock_;
         ROUTER = router_;
         SABLIER_LOCKUP = sablierLockup_;
-        NOICE_TOKEN = noiceToken_;
-        CREATOR_VESTING_PERCENTAGE = creatorVestingPercentage_;
-        SSLP_PERCENTAGE = sslpPercentage_;
+        SABLIER_BATCH_LOCKUP = sablierBatchLockup_;
+        _initializeOwner(owner_);
     }
 
-    /**
-     * @notice Bundles token creation with creator vesting, SSLP, and optional presale
-     * @param params Bundle parameters containing creation data, vesting info, SSLP tranches, and router commands
-     * @param presaleParticipants Array of presale participants (max 100)
-     */
+    /// @notice Main entry point for atomic token launch
+    /// @dev Executes in order: validation → token creation → LP unlock → creator vesting → prebuy → refund
+    /// @param params Complete bundle configuration
+    /// @param noicePrebuyParticipants Array of prebuy participants (max 100)
     function bundleWithCreatorVesting(
         BundleWithVestingParams calldata params,
-        PresaleParticipant[] calldata presaleParticipants
-    ) external payable {
-        if (presaleParticipants.length > 100) {
-            revert TooManyPresaleParticipants();
-        }
-        if (
-            params.vestingParams.creatorVestingStartTimestamp >=
-            params.vestingParams.creatorVestingEndTimestamp
-        ) {
-            revert InvalidVestingTimestamps();
+        NoicePrebuyParticipant[] calldata noicePrebuyParticipants
+    ) external payable onlyOwner {
+        if (noicePrebuyParticipants.length > 100) {
+            revert TooManyNoicePrebuyParticipants();
         }
 
-        uint256 creatorVestingAmount = _calculateAllocation(
-            params.createData.initialSupply,
-            CREATOR_VESTING_PERCENTAGE
-        );
+        for (uint256 i = 0; i < params.noiceCreatorAllocations.length; i++) {
+            if (
+                params.noiceCreatorAllocations[i].lockStartTimestamp
+                    >= params.noiceCreatorAllocations[i].lockEndTimestamp
+            ) {
+                revert InvalidVestingTimestamps();
+            }
+        }
 
-        uint256 sslpAmount = _calculateAllocation(
-            params.createData.initialSupply,
-            SSLP_PERCENTAGE
-        );
+        uint256 totalCreatorAllocationAmount = 0;
+        for (uint256 i = 0; i < params.noiceCreatorAllocations.length; i++) {
+            totalCreatorAllocationAmount += params.noiceCreatorAllocations[i].amount;
+        }
+
+        uint256 noiceLpUnlockAmount = (params.createData.initialSupply * params.noiceLpUnlockPercentage) / 10_000;
+
+        if (totalCreatorAllocationAmount + noiceLpUnlockAmount > params.createData.initialSupply) {
+            revert InvalidPercentages();
+        }
 
         CreateParams memory createData = params.createData;
         createData.numTokensToSell =
-            params.createData.initialSupply -
-            creatorVestingAmount -
-            sslpAmount;
+            params.createData.initialSupply - totalCreatorAllocationAmount - noiceLpUnlockAmount;
+
+        if (
+            totalCreatorAllocationAmount + noiceLpUnlockAmount + createData.numTokensToSell
+                != params.createData.initialSupply
+        ) {
+            revert InvalidPercentages();
+        }
 
         createData.governanceFactoryData = abi.encode(address(this));
 
-        (address asset, , , address timelock, ) = AIRLOCK.create(createData);
+        (address asset,,,,) = AIRLOCK.create(createData);
 
-        if (params.commands.length > 0) {
-            uint256 balance = address(this).balance;
-            ROUTER.execute{value: balance}(params.commands, params.inputs);
+        if (noiceLpUnlockAmount > 0 && params.noiceLpUnlockTranches.length > 0) {
+            _createNoiceLpUnlockPositions(asset, noiceLpUnlockAmount, params.noiceLpUnlockTranches);
         }
 
-        if (creatorVestingAmount > 0) {
-            _createCreatorVestingStream(
+        if (params.noiceCreatorAllocations.length > 0) {
+            _initiateCreatorVesting(asset, params.noiceCreatorAllocations);
+        }
+
+        if (noicePrebuyParticipants.length > 0) {
+            _executeNoicePrebuy(
                 asset,
-                timelock,
-                creatorVestingAmount,
-                params.vestingParams.creatorVestingStartTimestamp,
-                params.vestingParams.creatorVestingEndTimestamp
+                createData.numeraire,
+                noicePrebuyParticipants,
+                params.noicePrebuyCommands,
+                params.noicePrebuyInputs
             );
         }
-
-        if (sslpAmount > 0 && params.sslpTranches.length > 0) {
-            _createSSLPPositions(
-                asset,
-                sslpAmount,
-                params.sslpTranches
-            );
-        }
-
-        if (presaleParticipants.length > 0) {
-            _executePresale(
-                asset,
-                presaleParticipants,
-                params.presaleCommands,
-                params.presaleInputs
-            );
-        }
-
-        _transferRemainingFunds(asset, createData.numeraire);
     }
 
-    /**
-     * @notice Calculates allocation based on percentage
-     * @dev amount = (totalSupply * percentage) / 100
-     * @param totalSupply Total supply of the token
-     * @param percentage Percentage to allocate (0-100)
-     * @return amount Amount allocated
-     */
-    function _calculateAllocation(
-        uint256 totalSupply,
-        uint256 percentage
-    ) private pure returns (uint256) {
-        return (totalSupply * percentage) / 100;
+    /// @notice Creates batch vesting streams for creator allocations
+    /// @param asset Token to vest
+    /// @param allocations Array of creator allocation configurations
+    function _initiateCreatorVesting(address asset, NoiceCreatorAllocation[] calldata allocations) private {
+        uint256 validAllocationCount = 0;
+        for (uint256 i = 0; i < allocations.length; i++) {
+            if (allocations[i].amount > 0) {
+                validAllocationCount++;
+            }
+        }
+
+        if (validAllocationCount > 0) {
+            BatchLockup.CreateWithTimestampsLL[] memory batch =
+                new BatchLockup.CreateWithTimestampsLL[](validAllocationCount);
+
+            uint256 batchIndex = 0;
+            uint256 totalBatchAmount = 0;
+
+            for (uint256 i = 0; i < allocations.length; i++) {
+                NoiceCreatorAllocation calldata allocation = allocations[i];
+                if (allocation.amount > 0) {
+                    batch[batchIndex] = BatchLockup.CreateWithTimestampsLL({
+                        sender: address(this),
+                        recipient: allocation.recipient,
+                        totalAmount: uint128(allocation.amount),
+                        cancelable: true,
+                        transferable: true,
+                        timestamps: Lockup.Timestamps({
+                            start: allocation.lockStartTimestamp,
+                            end: allocation.lockEndTimestamp
+                        }),
+                        cliffTime: 0,
+                        unlockAmounts: LockupLinear.UnlockAmounts({ start: 0, cliff: 0 }),
+                        shape: "linear",
+                        broker: Broker({ account: address(0), fee: UD60x18.wrap(0) })
+                    });
+                    totalBatchAmount += allocation.amount;
+                    batchIndex++;
+                }
+            }
+
+            IERC20(asset).approve(address(SABLIER_BATCH_LOCKUP), totalBatchAmount);
+            SABLIER_BATCH_LOCKUP.createWithTimestampsLL(SABLIER_LOCKUP, IERC20(asset), batch);
+        }
     }
 
-    /**
-     * @notice Creates a vesting stream for the creator
-     * @param asset Address of the token to vest
-     * @param recipient Address of the vesting recipient
-     * @param amount Amount of tokens to vest
-     * @param startTimestamp Start timestamp for vesting
-     * @param endTimestamp End timestamp for vesting
-     */
-    function _createCreatorVestingStream(
+    /// @notice Executes prebuy: collects numeraire, swaps to asset, distributes pro-rata with vesting
+    /// @dev Pro-rata formula: participantShare = (totalAsset × participantNoice) / totalNoice
+    /// @param asset Token being launched
+    /// @param numeraire Quote token (e.g., USDC, WETH, etc.)
+    /// @param participants Array of prebuy participants
+    /// @param noicePrebuyCommands UniversalRouter commands for numeraire→asset swap
+    /// @param noicePrebuyInputs UniversalRouter inputs
+    function _executeNoicePrebuy(
         address asset,
-        address recipient,
-        uint256 amount,
-        uint40 startTimestamp,
-        uint40 endTimestamp
-    ) private {
-        uint256 balance = IERC20(asset).balanceOf(address(this));
-        if (balance < amount) {
-            revert InsufficientTokenBalance();
-        }
-
-        IERC20(asset).approve(address(SABLIER_LOCKUP), amount);
-        Lockup.CreateWithTimestamps memory params = Lockup
-            .CreateWithTimestamps({
-                sender: address(this),
-                recipient: recipient,
-                totalAmount: uint128(amount),
-                token: IERC20(asset),
-                cancelable: true,
-                transferable: true,
-                timestamps: Lockup.Timestamps({
-                    start: startTimestamp,
-                    end: endTimestamp
-                }),
-                shape: "linear",
-                broker: Broker({account: address(0), fee: UD60x18.wrap(0)})
-            });
-
-        LockupLinear.UnlockAmounts memory unlockAmounts = LockupLinear
-            .UnlockAmounts({start: 0, cliff: 0});
-
-        SABLIER_LOCKUP.createWithTimestampsLL(params, unlockAmounts, 0);
-    }
-
-    /**
-     * @notice Executes presale by collecting NOICE, swapping for tokens, and distributing to participants
-     * @dev Pro-rata allocation: participantShare = (totalTokens * participantNoice) / totalNoice
-     * @param asset Address of the newly created token
-     * @param participants Array of presale participants
-     * @param presaleCommands Router commands for swap
-     * @param presaleInputs Router inputs for swap
-     */
-    function _executePresale(
-        address asset,
-        PresaleParticipant[] calldata participants,
-        bytes calldata presaleCommands,
-        bytes[] calldata presaleInputs
+        address numeraire,
+        NoicePrebuyParticipant[] calldata participants,
+        bytes calldata noicePrebuyCommands,
+        bytes[] calldata noicePrebuyInputs
     ) private {
         uint256 totalNoice = 0;
 
+        // Phase 1: Collect numeraire from all participants
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i].noiceAmount > 0) {
-                IERC20(NOICE_TOKEN).transferFrom(
-                    participants[i].lockedAddress,
-                    address(this),
-                    participants[i].noiceAmount
+                IERC20(numeraire).transferFrom(
+                    participants[i].lockedAddress, address(this), participants[i].noiceAmount
                 );
                 totalNoice += participants[i].noiceAmount;
             }
 
-            if (
-                participants[i].vestingStartTimestamp >=
-                participants[i].vestingEndTimestamp
-            ) {
+            if (participants[i].vestingStartTimestamp >= participants[i].vestingEndTimestamp) {
                 revert InvalidVestingTimestamps();
             }
         }
 
         if (totalNoice == 0) return;
 
+        // Phase 2: Swap numeraire → asset
         uint256 assetBalanceBefore = IERC20(asset).balanceOf(address(this));
 
-        IERC20(NOICE_TOKEN).approve(address(ROUTER), totalNoice);
+        // UniversalRouter uses Permit2 for token approvals
+        // Step 1: Approve Permit2 to spend numeraire
+        IERC20(numeraire).approve(address(PERMIT2), type(uint256).max);
 
-        if (presaleCommands.length > 0) {
-            ROUTER.execute(presaleCommands, presaleInputs);
+        // Step 2: Approve router via Permit2 with expiration
+        PERMIT2.approve(numeraire, address(ROUTER), type(uint160).max, uint48(block.timestamp + 1 hours));
+
+        if (noicePrebuyCommands.length > 0) {
+            ROUTER.execute(noicePrebuyCommands, noicePrebuyInputs);
         }
 
         uint256 assetBalanceAfter = IERC20(asset).balanceOf(address(this));
@@ -315,124 +302,108 @@ contract NoiceLaunchpad is MiniV4Manager {
 
         if (totalTokensReceived == 0) return;
 
+        // Phase 3: Distribute tokens pro-rata with vesting
+        uint256 validParticipantCount = 0;
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i].noiceAmount > 0) {
                 uint256 participantShare = (totalTokensReceived * participants[i].noiceAmount) / totalNoice;
-
                 if (participantShare > 0) {
-                    _createPresaleVestingStream(
-                        asset,
-                        participants[i].vestingRecipient,
-                        participantShare,
-                        participants[i].vestingStartTimestamp,
-                        participants[i].vestingEndTimestamp
-                    );
+                    validParticipantCount++;
                 }
             }
         }
+
+        if (validParticipantCount > 0) {
+            BatchLockup.CreateWithTimestampsLL[] memory batch =
+                new BatchLockup.CreateWithTimestampsLL[](validParticipantCount);
+
+            uint256 batchIndex = 0;
+            uint256 totalBatchAmount = 0;
+
+            for (uint256 i = 0; i < participants.length; i++) {
+                if (participants[i].noiceAmount > 0) {
+                    uint256 participantShare = (totalTokensReceived * participants[i].noiceAmount) / totalNoice;
+
+                    if (participantShare > 0) {
+                        batch[batchIndex] = BatchLockup.CreateWithTimestampsLL({
+                            sender: address(this),
+                            recipient: participants[i].vestingRecipient,
+                            totalAmount: uint128(participantShare),
+                            cancelable: true,
+                            transferable: true,
+                            timestamps: Lockup.Timestamps({
+                                start: participants[i].vestingStartTimestamp,
+                                end: participants[i].vestingEndTimestamp
+                            }),
+                            cliffTime: 0,
+                            unlockAmounts: LockupLinear.UnlockAmounts({ start: 0, cliff: 0 }),
+                            shape: "linear",
+                            broker: Broker({ account: address(0), fee: UD60x18.wrap(0) })
+                        });
+                        totalBatchAmount += participantShare;
+                        batchIndex++;
+                    }
+                }
+            }
+
+            IERC20(asset).approve(address(SABLIER_BATCH_LOCKUP), totalBatchAmount);
+            SABLIER_BATCH_LOCKUP.createWithTimestampsLL(SABLIER_LOCKUP, IERC20(asset), batch);
+        }
     }
 
-    /**
-     * @notice Creates a vesting stream for a presale participant
-     * @param asset Address of the token to vest
-     * @param recipient Address of the vesting recipient
-     * @param amount Amount of tokens to vest
-     * @param startTimestamp Start timestamp for vesting
-     * @param endTimestamp End timestamp for vesting
-     */
-    function _createPresaleVestingStream(
+    /// @notice Creates out-of-range LP positions that convert to NOICE as price rises
+    /// @dev Token0: positions above current tick | Token1: positions below current tick
+    /// @param asset Token to provide as liquidity
+    /// @param noiceLpUnlockAmount Total amount for LP unlock
+    /// @param tranches Position configurations
+    function _createNoiceLpUnlockPositions(
         address asset,
-        address recipient,
-        uint256 amount,
-        uint40 startTimestamp,
-        uint40 endTimestamp
+        uint256 noiceLpUnlockAmount,
+        NoiceLpUnlockTranche[] calldata tranches
     ) private {
-        IERC20(asset).approve(address(SABLIER_LOCKUP), amount);
-
-        Lockup.CreateWithTimestamps memory params = Lockup
-            .CreateWithTimestamps({
-                sender: address(this),
-                recipient: recipient,
-                totalAmount: uint128(amount),
-                token: IERC20(asset),
-                cancelable: true,
-                transferable: true,
-                timestamps: Lockup.Timestamps({
-                    start: startTimestamp,
-                    end: endTimestamp
-                }),
-                shape: "linear",
-                broker: Broker({account: address(0), fee: UD60x18.wrap(0)})
-            });
-
-        LockupLinear.UnlockAmounts memory unlockAmounts = LockupLinear
-            .UnlockAmounts({start: 0, cliff: 0});
-
-        SABLIER_LOCKUP.createWithTimestampsLL(params, unlockAmounts, 0);
-    }
-
-    /**
-     * @notice Creates single-sided liquidity positions for price-based NOICE rewards
-     * @param asset Address of the newly created token
-     * @param sslpAmount Total amount of tokens allocated for SSLP
-     * @param tranches Array of SSLP tranches defining tick ranges and recipients
-     */
-    function _createSSLPPositions(
-        address asset,
-        uint256 sslpAmount,
-        SSLPTranche[] calldata tranches
-    ) private {
-        uint256 totalShares = 0;
+        uint256 totalAmount = 0;
         for (uint256 i = 0; i < tranches.length; i++) {
-            totalShares += tranches[i].shares;
+            totalAmount += tranches[i].amount;
             if (tranches[i].tickLower >= tranches[i].tickUpper) {
-                revert InvalidSSLPTranches();
+                revert InvalidNoiceLpUnlockTranches();
             }
         }
-        if (totalShares != 10000) {
-            revert InvalidSSLPTranches();
+
+        if (totalAmount != noiceLpUnlockAmount) {
+            revert InvalidNoiceLpUnlockTranches();
         }
 
-        // Get pool info from multicurve initializer
         (,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
-        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(
-            address(poolInitializer)
-        );
+        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(address(poolInitializer));
         (,, PoolKey memory poolKey,) = initializer.getState(asset);
 
-        // Check if asset is token0 to determine position side
         bool isToken0 = asset == Currency.unwrap(poolKey.currency0);
-
-        // Get current tick to validate positions are above current price
         (, int24 currentTick,,) = poolManager.getSlot0(poolKey.toId());
 
-        // Validate all tranches are positioned correctly for price-based unlocks
         for (uint256 i = 0; i < tranches.length; i++) {
             if (isToken0) {
-                // Asset is token0: price rises when tick increases
-                // Positions must be above current tick to activate on price rise
+                // Token0: positions must be above current tick
                 if (tranches[i].tickLower <= currentTick) {
-                    revert InvalidSSLPTranches();
+                    revert InvalidNoiceLpUnlockTranches();
                 }
             } else {
-                // Asset is token1: price rises when tick decreases
-                // Positions must be below current tick to activate on price rise
+                // Token1: positions must be below current tick
                 if (tranches[i].tickUpper >= currentTick) {
-                    revert InvalidSSLPTranches();
+                    revert InvalidNoiceLpUnlockTranches();
                 }
             }
         }
 
-        // Create positions for each tranche
         uint256 positionIndex = 0;
         for (uint256 i = 0; i < tranches.length; i++) {
-            SSLPTranche calldata tranche = tranches[i];
-            uint256 trancheAmount = (sslpAmount * tranche.shares) / 10000;
+            NoiceLpUnlockTranche calldata tranche = tranches[i];
 
-            // Calculate liquidity for the position
-            // For single-sided positions, we only provide the asset token
-            // Using a simplified approach - actual liquidity calculation would use TickMath
-            uint128 liquidity = uint128(trancheAmount);
+            uint160 sqrtPriceLowerX96 = TickMath.getSqrtPriceAtTick(tranche.tickLower);
+            uint160 sqrtPriceUpperX96 = TickMath.getSqrtPriceAtTick(tranche.tickUpper);
+
+            uint128 liquidity = isToken0
+                ? LiquidityAmounts.getLiquidityForAmount0(sqrtPriceLowerX96, sqrtPriceUpperX96, tranche.amount)
+                : LiquidityAmounts.getLiquidityForAmount1(sqrtPriceLowerX96, sqrtPriceUpperX96, tranche.amount);
 
             Position memory position = Position({
                 tickLower: tranche.tickLower,
@@ -441,108 +412,85 @@ contract NoiceLaunchpad is MiniV4Manager {
                 salt: bytes32(uint256(keccak256(abi.encode(asset, i))))
             });
 
-            sslpPositions[asset].push(position);
-            sslpPositionRecipient[asset][positionIndex] = tranche.recipient;
+            noiceLpUnlockPositions[asset].push(position);
+            noiceLpUnlockPositionRecipient[asset][positionIndex] = tranche.recipient;
             positionIndex++;
         }
 
-        // Mint all positions
-        IERC20(asset).approve(address(poolManager), sslpAmount);
-        _mint(poolKey, sslpPositions[asset]);
+        IERC20(asset).approve(address(poolManager), noiceLpUnlockAmount);
+        _mint(poolKey, noiceLpUnlockPositions[asset]);
     }
 
-    /**
-     * @notice Returns all SSLP positions for an asset
-     * @param asset Address of the token
-     * @return positions Array of SSLP positions
-     */
-    function getSSLPPositions(address asset) external view returns (Position[] memory) {
-        return sslpPositions[asset];
+    /// @notice Returns all LP unlock positions for an asset
+    /// @param asset Token address
+    /// @return Array of Position structs
+    function getNoiceLpUnlockPositions(
+        address asset
+    ) external view returns (Position[] memory) {
+        return noiceLpUnlockPositions[asset];
     }
 
-    /**
-     * @notice Returns the number of SSLP positions for an asset
-     * @param asset Address of the token
-     * @return count Number of SSLP positions
-     */
-    function getSSLPPositionCount(address asset) external view returns (uint256) {
-        return sslpPositions[asset].length;
+    /// @notice Returns the number of LP unlock positions for an asset
+    /// @param asset Token address
+    /// @return Position count
+    function getNoiceLpUnlockPositionCount(
+        address asset
+    ) external view returns (uint256) {
+        return noiceLpUnlockPositions[asset].length;
     }
 
-    /**
-     * @notice Withdraws SSLP position and receives accumulated NOICE
-     * @dev Burns the position - returns NOICE that accumulated as price moved through the range
-     * @param asset Address of the token
-     * @param positionIndex Index of the position to withdraw
-     */
-    function withdrawSSLPPosition(address asset, uint256 positionIndex) external {
-        require(sslpPositionRecipient[asset][positionIndex] == msg.sender, "Not position owner");
-        require(!sslpPositionWithdrawn[asset][positionIndex], "Already withdrawn");
-        require(positionIndex < sslpPositions[asset].length, "Invalid position index");
+    /// @notice Burns LP unlock position and transfers accumulated numeraire to recipient
+    /// @param asset Token address
+    /// @param positionIndex Index in noiceLpUnlockPositions array
+    function withdrawNoiceLpUnlockPosition(address asset, uint256 positionIndex) external {
+        require(noiceLpUnlockPositionRecipient[asset][positionIndex] == msg.sender, "Not position owner");
+        require(!noiceLpUnlockPositionWithdrawn[asset][positionIndex], "Already withdrawn");
+        require(positionIndex < noiceLpUnlockPositions[asset].length, "Invalid position index");
 
-        // Get pool info
-        (,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
-        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(
-            address(poolInitializer)
-        );
+        (address numeraire,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
+        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(address(poolInitializer));
         (,, PoolKey memory poolKey,) = initializer.getState(asset);
 
-        // Create array with single position to burn
         Position[] memory positionsToBurn = new Position[](1);
-        positionsToBurn[0] = sslpPositions[asset][positionIndex];
+        positionsToBurn[0] = noiceLpUnlockPositions[asset][positionIndex];
 
-        // Burn position and get accumulated NOICE
-        uint256 noiceBalanceBefore = IERC20(NOICE_TOKEN).balanceOf(address(this));
+        uint256 numeraireBalanceBefore = IERC20(numeraire).balanceOf(address(this));
         _burn(poolKey, positionsToBurn);
-        uint256 noiceBalanceAfter = IERC20(NOICE_TOKEN).balanceOf(address(this));
+        uint256 numeraireBalanceAfter = IERC20(numeraire).balanceOf(address(this));
+        uint256 numeraireReceived = numeraireBalanceAfter - numeraireBalanceBefore;
 
-        uint256 noiceReceived = noiceBalanceAfter - noiceBalanceBefore;
+        noiceLpUnlockPositionWithdrawn[asset][positionIndex] = true;
 
-        // Mark as withdrawn
-        sslpPositionWithdrawn[asset][positionIndex] = true;
-
-        // Transfer NOICE to recipient
-        if (noiceReceived > 0) {
-            IERC20(NOICE_TOKEN).transfer(msg.sender, noiceReceived);
+        if (numeraireReceived > 0) {
+            IERC20(numeraire).transfer(msg.sender, numeraireReceived);
         }
     }
 
-    /**
-     * @notice Transfers remaining funds back to sender
-     * @param asset Address of the asset token
-     * @param numeraire Address of the numeraire token
-     */
-    function _transferRemainingFunds(address asset, address numeraire) private {
-        uint256 ethBalance = address(this).balance;
-        if (ethBalance > 0) {
-            SafeTransferLib.safeTransferETH(msg.sender, ethBalance);
-        }
+    /// @notice Cancel Sablier vesting streams and refund tokens to launchpad
+    /// @dev Stream IDs obtained off-chain from Sablier creation events
+    /// @dev Cancelled tokens automatically refund to launchpad (sender), use sweep() to redistribute
+    /// @param streamIds Array of Sablier stream IDs to cancel
+    function cancelVestingStreams(
+        uint256[] calldata streamIds
+    ) external onlyOwner {
+        for (uint256 i = 0; i < streamIds.length; i++) {
+            // Security: verify launchpad is the sender of this stream
+            require(SABLIER_LOCKUP.getSender(streamIds[i]) == address(this), "Not stream sender");
 
-        uint256 assetBalance = SafeTransferLib.balanceOf(asset, address(this));
-        if (assetBalance > 0) {
-            SafeTransferLib.safeTransfer(asset, msg.sender, assetBalance);
-        }
-
-        uint256 numeraireBalance = SafeTransferLib.balanceOf(
-            numeraire,
-            address(this)
-        );
-        if (numeraireBalance > 0) {
-            SafeTransferLib.safeTransfer(
-                numeraire,
-                msg.sender,
-                numeraireBalance
-            );
-        }
-
-        uint256 noiceBalance = SafeTransferLib.balanceOf(
-            NOICE_TOKEN,
-            address(this)
-        );
-        if (noiceBalance > 0) {
-            SafeTransferLib.safeTransfer(NOICE_TOKEN, msg.sender, noiceBalance);
+            SABLIER_LOCKUP.cancel(streamIds[i]);
         }
     }
 
-    receive() external payable {}
+    /// @notice Sweep tokens or ETH from the contract to the owner
+    /// @param token Address of token to sweep (address(0) for ETH)
+    /// @param to Address to send the swept funds to
+    function sweep(address token, address to) external onlyOwner {
+        if (token == address(0)) {
+            SafeTransferLib.safeTransferETH(to, address(this).balance);
+        } else {
+            SafeTransferLib.safeTransfer(token, to, SafeTransferLib.balanceOf(token, address(this)));
+        }
+    }
+
+    receive() external payable { }
 }
