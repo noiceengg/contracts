@@ -192,6 +192,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
             address(router_) == address(0) ||
             address(sablierLockup_) == address(0) ||
             address(sablierBatchLockup_) == address(0) ||
+            address(poolManager_) == address(0) ||
             owner_ == address(0)
         ) {
             revert InvalidAddresses();
@@ -521,7 +522,6 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
             positionIndex++;
         }
 
-        IERC20(asset).approve(address(poolManager), noiceLpUnlockAmount);
         _mint(poolKey, noiceLpUnlockPositions[asset]);
     }
 
