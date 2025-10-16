@@ -41,6 +41,9 @@ error InsufficientTokenBalance();
 /// @notice Thrown when LP unlock tranche configuration is invalid
 error InvalidNoiceLpUnlockTranches();
 
+/// @notice Thrown when tokenFactoryData contains vesting configuration
+error TokenFactoryVestingNotSupported();
+
 /// @notice Creator allocation configuration
 /// @param recipient Address receiving allocated tokens
 /// @param amount Amount to allocate
@@ -214,6 +217,25 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         BundleWithVestingParams calldata params,
         NoicePrebuyParticipant[] calldata noicePrebuyParticipants
     ) external payable onlyRolesOrOwner(EXECUTOR_ROLE) {
+        // Validate tokenFactoryData does not contain vesting configuration
+        (
+            ,  // name
+            ,  // symbol
+            ,  // yearlyMintCap
+            ,  // vestingDuration
+            address[] memory vestingRecipients,
+            uint256[] memory vestingAmounts,
+               // tokenURI
+        ) = abi.decode(
+            params.createData.tokenFactoryData,
+            (string, string, uint256, uint256, address[], uint256[], string)
+        );
+
+        // Revert if vesting is configured in tokenFactoryData
+        if (vestingRecipients.length > 0 || vestingAmounts.length > 0) {
+            revert TokenFactoryVestingNotSupported();
+        }
+
         uint256 totalCreatorAllocationAmount = 0;
         for (uint256 i = 0; i < params.noiceCreatorAllocations.length; i++) {
             totalCreatorAllocationAmount += params
