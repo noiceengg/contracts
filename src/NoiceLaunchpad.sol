@@ -525,22 +525,44 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         _mint(poolKey, noiceLpUnlockPositions[asset]);
     }
 
-    /// @notice Returns all LP unlock positions for an asset
+    /// @notice Returns active (non-withdrawn) LP unlock positions for an asset
     /// @param asset Token address
-    /// @return Array of Position structs
+    /// @return Array of active Position structs
     function getNoiceLpUnlockPositions(
         address asset
     ) external view returns (Position[] memory) {
-        return noiceLpUnlockPositions[asset];
+        Position[] storage allPositions = noiceLpUnlockPositions[asset];
+        uint256 totalPositions = allPositions.length;
+
+        Position[] memory activePositions = new Position[](totalPositions);
+        uint256 activeCount = 0;
+
+        for (uint256 i = 0; i < totalPositions; i++) {
+            if (!noiceLpUnlockPositionWithdrawn[asset][i]) {
+                activePositions[activeCount] = allPositions[i];
+                activeCount++;
+            }
+        }
+
+        return activePositions;
     }
 
-    /// @notice Returns the number of LP unlock positions for an asset
+    /// @notice Returns the number of active (non-withdrawn) LP unlock positions for an asset
     /// @param asset Token address
-    /// @return Position count
+    /// @return Active position count
     function getNoiceLpUnlockPositionCount(
         address asset
     ) external view returns (uint256) {
-        return noiceLpUnlockPositions[asset].length;
+        uint256 totalPositions = noiceLpUnlockPositions[asset].length;
+        uint256 activeCount = 0;
+
+        for (uint256 i = 0; i < totalPositions; i++) {
+            if (!noiceLpUnlockPositionWithdrawn[asset][i]) {
+                activeCount++;
+            }
+        }
+
+        return activeCount;
     }
 
     /// @notice Burns LP unlock position and transfers accumulated NOICE to specified recipient
