@@ -19,7 +19,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
     address public latestAsset;
 
     function test_CreatorAllocation_SingleRecipient_VerifySablier() public {
-
         address recipient = makeAddr("founder");
         uint256 lockAmount = 45_000_000_000e18; // 45B tokens (45%)
 
@@ -61,7 +60,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
         bool isTransferable = sablierLockup.isTransferable(streamId);
         assertTrue(isTransferable, "Stream should be transferable");
 
-
         // Test vesting after 6 months
         vm.warp(block.timestamp + 183 days);
 
@@ -83,7 +81,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
     }
 
     function test_CreatorAllocation_MultipleRecipients_VerifySablier() public {
-
         address founder = makeAddr("founder");
         address advisor = makeAddr("advisor");
         address treasury = makeAddr("treasury");
@@ -133,7 +130,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
 
             address sender = sablierLockup.getSender(streamId);
             assertEq(sender, address(launchpad), "Sender should be launchpad");
-
         }
 
         // Test different vesting schedules
@@ -147,7 +143,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
         uint256 withdrawable1 = sablierLockup.withdrawableAmountOf(stream1);
         uint256 withdrawable2 = sablierLockup.withdrawableAmountOf(stream2);
 
-
         // Founder should have some vested (90 days - 30 day cliff = 60 days vested / 730 days total)
         assertGt(withdrawable0, 0, "Founder should have tokens vested");
 
@@ -159,7 +154,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
     }
 
     function test_CreatorAllocation_LinearVesting() public {
-
         address recipient = makeAddr("recipient");
         uint256 lockAmount = 36_500_000_000e18; // 36.5B tokens
 
@@ -212,7 +206,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
     }
 
     function test_CreatorAllocation_ZeroAmountSkipped() public {
-
         NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](3);
         locks[0] = NoiceCreatorAllocation({
             recipient: makeAddr("recipient1"),
@@ -243,11 +236,9 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
         // Should create only 2 streams (skip zero amount)
         uint256 nextStreamIdAfter = sablierLockup.nextStreamId();
         assertEq(nextStreamIdAfter, nextStreamIdBefore + 2, "Should create only 2 streams");
-
     }
 
     function test_CreatorAllocation_100Recipients() public {
-
         // Create 100 creator locks
         NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](100);
         uint256 totalLocked = 0;
@@ -271,7 +262,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
             totalLocked += amount;
         }
 
-
         BundleWithVestingParams memory params = _createBundleParams(locks);
         NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
 
@@ -284,7 +274,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
         // Verify 100 streams created
         uint256 nextStreamIdAfter = sablierLockup.nextStreamId();
         assertEq(nextStreamIdAfter, nextStreamIdBefore + 100, "Should create 100 streams");
-
 
         // Verify each stream
         for (uint256 i = 0; i < 100; i++) {
@@ -302,7 +291,6 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
             bool isCancelable = sablierLockup.isCancelable(streamId);
             assertTrue(isCancelable, "Stream should be cancelable");
         }
-
 
         // Test withdrawals after 6 months
         vm.warp(block.timestamp + 183 days);
@@ -324,6 +312,5 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
                 totalWithdrawn += withdrawable;
             }
         }
-
     }
 }

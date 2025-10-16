@@ -15,7 +15,6 @@ contract NoiceSweepTest is NoiceBaseTest {
     address public latestAsset;
 
     function test_Sweep_TokensToRecipient() public {
-
         // Launch token to get some dust
         NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](0);
         BundleWithVestingParams memory params = _createBundleParams(locks);
@@ -39,15 +38,12 @@ contract NoiceSweepTest is NoiceBaseTest {
         // Verify launchpad has 0
         uint256 remainingDust = IERC20(latestAsset).balanceOf(address(launchpad));
         assertEq(remainingDust, 0, "Launchpad should have 0");
-
     }
 
     function test_Sweep_ETH() public {
-
         // Send some ETH to launchpad
         uint256 ethAmount = 1 ether;
         vm.deal(address(launchpad), ethAmount);
-
 
         uint256 recipientBalanceBefore = recipient.balance;
 
@@ -60,11 +56,9 @@ contract NoiceSweepTest is NoiceBaseTest {
 
         // Verify launchpad has 0 ETH
         assertEq(address(launchpad).balance, 0, "Launchpad should have 0 ETH");
-
     }
 
     function test_Sweep_OnlyOwner() public {
-
         // Launch token to get some dust
         NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](0);
         BundleWithVestingParams memory params = _createBundleParams(locks);
@@ -86,15 +80,12 @@ contract NoiceSweepTest is NoiceBaseTest {
         // Verify dust still in launchpad
         uint256 remainingDust = IERC20(latestAsset).balanceOf(address(launchpad));
         assertEq(remainingDust, dustAmount, "Dust should remain in launchpad");
-
     }
 
     function test_Sweep_NoiceToken() public {
-
         // Send some NOICE to launchpad
         uint256 noiceAmount = 1000e18;
         deal(NOICE_TOKEN, address(launchpad), noiceAmount);
-
 
         // Owner sweeps NOICE to recipient
         launchpad.sweep(NOICE_TOKEN, recipient);
@@ -106,11 +97,9 @@ contract NoiceSweepTest is NoiceBaseTest {
         // Verify launchpad has 0 NOICE
         uint256 remainingNoice = IERC20(NOICE_TOKEN).balanceOf(address(launchpad));
         assertEq(remainingNoice, 0, "Launchpad should have 0 NOICE");
-
     }
 
     function test_Sweep_NoBalance() public {
-
         // Try to sweep when there's nothing
         launchpad.sweep(NOICE_TOKEN, recipient);
 

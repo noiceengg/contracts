@@ -93,12 +93,8 @@ contract NoiceExecutorRoleTest is NoiceBaseTest {
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
-        tranches[0] = NoiceLpUnlockTranche({
-            amount: tokenAmount,
-            tickLower: 10_020,
-            tickUpper: 19_980,
-            recipient: recipient1
-        });
+        tranches[0] =
+            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
 
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
         BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
@@ -121,12 +117,8 @@ contract NoiceExecutorRoleTest is NoiceBaseTest {
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
-        tranches[0] = NoiceLpUnlockTranche({
-            amount: tokenAmount,
-            tickLower: 10_020,
-            tickUpper: 19_980,
-            recipient: recipient1
-        });
+        tranches[0] =
+            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
 
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
         BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
@@ -146,12 +138,8 @@ contract NoiceExecutorRoleTest is NoiceBaseTest {
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
-        tranches[0] = NoiceLpUnlockTranche({
-            amount: tokenAmount,
-            tickLower: 10_020,
-            tickUpper: 19_980,
-            recipient: recipient1
-        });
+        tranches[0] =
+            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
 
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
         BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);

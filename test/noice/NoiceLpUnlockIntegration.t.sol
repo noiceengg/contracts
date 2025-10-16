@@ -36,67 +36,17 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
 
-    TestMulticurveHook public testHook;
     address public recipient1 = makeAddr("recipient1");
     address public recipient2 = makeAddr("recipient2");
     address public latestAsset;
 
-    function setUp() public override {
-        // Fork Base mainnet
-        string memory rpcUrl = vm.envString("BASE_MAINNET_RPC_URL");
-        vm.createSelectFork(rpcUrl);
-
-        // Initialize external contracts
-        airlock = Airlock(payable(AIRLOCK));
-        router = UniversalRouter(payable(UNIVERSAL_ROUTER));
-        sablierLockup = ISablierLockup(SABLIER_LOCKUP);
-        sablierBatchLockup = ISablierBatchLockup(SABLIER_BATCH_LOCKUP);
-        poolManager = IPoolManager(POOL_MANAGER);
-
-        // Deploy test contracts
-        governanceFactory = new TeamGovernanceFactory();
-        tokenFactory = new TokenFactory(address(airlock));
-        noOpMigrator = new NoOpMigrator(address(airlock));
-
-        // Calculate hook address with correct permissions first
-        address hookAddress = address(
-            uint160(
-                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG
-                    | Hooks.AFTER_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
-            ) ^ (0x4444 << 144)
-        );
-
-        // Deploy multicurve initializer first (with reference to hook address)
-        multicurveInitializer = new UniswapV4MulticurveInitializer(
-            address(airlock), poolManager, UniswapV4MulticurveInitializerHook(hookAddress)
-        );
-
-        // Deploy launchpad
-        launchpad = new NoiceLaunchpad(airlock, router, sablierLockup, sablierBatchLockup, poolManager, address(this));
-
-        // Deploy custom hook that whitelists both initializer AND launchpad
-        deployCodeTo(
-            "TestMulticurveHook",
-            abi.encode(poolManager, address(multicurveInitializer), address(launchpad)),
-            hookAddress
-        );
-
-        testHook = TestMulticurveHook(hookAddress);
-        hook = UniswapV4MulticurveInitializerHook(hookAddress);
-
-        // Register modules with Airlock
-        _registerAirlockModules();
-    }
-
     function test_LpUnlock_SingleTranche_Success() public {
-
         uint256 unlockPercentage = 1000; // 10%
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000; // 10B tokens
 
         // Define tick range
         int24 tickLower = 10_020; // Multiple of 60
         int24 tickUpper = 19_980; // Multiple of 60, below current tick
-
 
         // Create valid tranches - positions BELOW current tick (asset is token1, tick ~20040)
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
@@ -143,11 +93,9 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
         // Verify recipient mapping
         address storedRecipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, 0);
         assertEq(storedRecipient, recipient1, "Recipient mismatch");
-
     }
 
     function test_LpUnlock_MultipleTranches_Success() public {
-
         uint256 unlockPercentage = 1500; // 15%
         uint256 totalTokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000; // 15B tokens
 
@@ -205,11 +153,9 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
             // Verify stored liquidity matches actual
             assertEq(positions[i].liquidity, actualLiquidity, "Stored liquidity should match actual");
         }
-
     }
 
     function test_LpUnlock_WithdrawalFlow() public {
-
         uint256 unlockPercentage = 1000; // 10%
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
