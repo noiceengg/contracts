@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import { SafeTransferLib } from "@solady/utils/SafeTransferLib.sol";
 import { OwnableRoles } from "@solady/auth/OwnableRoles.sol";
+import { LibCall } from "@solady/utils/LibCall.sol";
 import { Airlock, CreateParams, AssetData } from "src/Airlock.sol";
 import { IPoolInitializer } from "src/interfaces/IPoolInitializer.sol";
 import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
@@ -560,6 +561,16 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
             SafeTransferLib.safeTransferETH(to, address(this).balance);
         } else {
             SafeTransferLib.safeTransfer(token, to, SafeTransferLib.balanceOf(token, address(this)));
+        }
+    }
+
+    /// @notice Execute arbitrary batch calldata from the contract
+    /// @dev Only callable by owner for emergency operations or contract interactions
+    function execute(address[] calldata targets, uint256[] calldata values, bytes[] calldata data) external payable onlyOwner returns (bytes[] memory results) {
+        require(targets.length == values.length && targets.length == data.length, "Length mismatch");
+        results = new bytes[](targets.length);
+        for (uint256 i = 0; i < targets.length; i++) {
+            results[i] = LibCall.callContract(targets[i], values[i], data[i]);
         }
     }
 
