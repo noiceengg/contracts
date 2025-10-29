@@ -39,12 +39,14 @@ contract ExecuteTrades is Script {
     // Contract addresses
     address constant NOICE_TOKEN = 0x9Cb41FD9dC6891BAe8187029461bfAADF6CC0C69;
     address constant POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
-    address constant UNIVERSAL_ROUTER = 0x6fF5693b99212Da76ad316178A184AB56D299b43;
+    address constant UNIVERSAL_ROUTER =
+        0x6fF5693b99212Da76ad316178A184AB56D299b43;
     address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
-    address constant MULTICURVE_HOOK = 0x3e342a06f9592459D75721d6956B570F02eF2Dc0;
+    address constant MULTICURVE_HOOK =
+        0x3e342a06f9592459D75721d6956B570F02eF2Dc0;
 
     // Target swap amount
-    uint256 constant TOKENS_TO_SWAP = 30_000_000_000 ether; // 30B tokens
+    uint256 constant TOKENS_TO_SWAP = 45_000_000_000 ether; // 30B tokens
 
     PoolKey public poolKey;
     IPoolManager public poolManager;

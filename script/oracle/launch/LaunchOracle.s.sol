@@ -52,38 +52,40 @@ contract LaunchOracle is Script {
     string constant TOKEN_URI = "ipfs://bafybeia3xdx3otq6fi7l2x5szaz5b6biex747gsyuyqi2tk3lzm66fdaiu";
     uint256 constant INITIAL_SUPPLY = 100_000_000_000 ether; // 100B tokens
 
-    // NOICE price: $0.0005671
     // Token amounts (Total: 100B)
+    // NOICE price: $0.0005671
     uint256 constant CREATOR_VESTING = 30_000_000_000 ether; // 30B (30%)
     uint256 constant CREATOR_UNLOCKED = 5_000_000_000 ether; // 5B (5%)
-    uint256 constant SSL_TRANCHE_1 = 3_850_000_000 ether; // 3.85B - $250K-$2.5M
+    uint256 constant SSL_TRANCHE_1 = 3_850_000_000 ether; // 3.85B - $252K-$2.5M
     uint256 constant SSL_TRANCHE_2 = 4_460_000_000 ether; // 4.46B - $2.5M-$5M
     uint256 constant SSL_TRANCHE_3 = 4_240_000_000 ether; // 4.24B - $5M-$10M
     uint256 constant SSL_TRANCHE_4 = 2_450_000_000 ether; // 2.45B - $10M-$15M
-    uint256 constant PUBLIC_EARLY = 5_000_000_000 ether; // 5B (5%)
-    uint256 constant PUBLIC_LATE = 35_000_000_000 ether; // 35B (35%)
-    uint256 constant PREBUY_ALLOCATION = 10_000_000_000 ether; // 10B (10%)
-    uint256 constant NUM_TOKENS_TO_SELL = 50_000_000_000 ether; // 50B (40B public + 10B prebuy)
+    uint256 constant PREBUY_LIQUIDITY = 10_000_000_000 ether; // 10B (10% of supply) - $200K-$250K
+    uint256 constant PUBLIC_EARLY = 5_000_000_000 ether; // 5B (5% of supply) - $250K-$1M
+    uint256 constant PUBLIC_LATE = 35_000_000_000 ether; // 35B (35% of supply) - $1M-$1.5B
+    uint256 constant PREBUY_ALLOCATION = 10_000_000_000 ether; // 10B (10% - atomic prebuy)
+    uint256 constant NUM_TOKENS_TO_SELL = 50_000_000_000 ether; // 50B (10B prebuy liq + 5B early + 35B late)
     uint256 constant MAX_NOICE_INPUT = 200_000_000 ether; // 200M NOICE max for prebuy
 
-    // Tick boundaries (calculated with NOICE = $0.0005671)
-    int24 constant TICK_250K = -49_560; // $250K (multicurve start)
-    int24 constant TICK_2_5M = -25_500; // $2.5M
-    int24 constant TICK_5M = -18_420; // $5M
-    int24 constant TICK_10M = -11_340; // $10M
-    int24 constant TICK_15M = -6_840; // $15M
-    int24 constant TICK_1M = -35_460; // $998K (public late start)
-    int24 constant TICK_1_5B = 37_440; // $1.5B (multicurve end)
+    // Tick boundaries (calculated with NOICE = $0.0005671, 40B tokens in circulation)
+    int24 constant TICK_200K = -56460; // $200K (prebuy liquidity start)
+    int24 constant TICK_250K = -45060; // $250K (multicurve start)
+    int24 constant TICK_2_5M = -22080; // $2.5M
+    int24 constant TICK_5M = -15120; // $5M
+    int24 constant TICK_10M = -8220; // $10M
+    int24 constant TICK_15M = -4140; // $15M
+    int24 constant TICK_1M = -31200; // $1M (public late start)
+    int24 constant TICK_1_5B = 41940; // $1.5B (multicurve end)
 
     // SSL tick boundaries (must be above initial tick for token0)
-    int24 constant SSL1_TICK_LOWER = -49_500; // ~$252K (slightly above $250K start)
-    int24 constant SSL1_TICK_UPPER = -25_500; // $2.5M
-    int24 constant SSL2_TICK_LOWER = -25_500; // $2.5M
-    int24 constant SSL2_TICK_UPPER = -18_420; // $5M
-    int24 constant SSL3_TICK_LOWER = -18_420; // $5M
-    int24 constant SSL3_TICK_UPPER = -11_340; // $10M
-    int24 constant SSL4_TICK_LOWER = -11_340; // $10M
-    int24 constant SSL4_TICK_UPPER = -6_840; // $15M
+    int24 constant SSL1_TICK_LOWER = -45000; // ~$252K (slightly above $250K start)
+    int24 constant SSL1_TICK_UPPER = -22080; // $2.5M
+    int24 constant SSL2_TICK_LOWER = -22080; // $2.5M
+    int24 constant SSL2_TICK_UPPER = -15120; // $5M
+    int24 constant SSL3_TICK_LOWER = -15120; // $5M
+    int24 constant SSL3_TICK_UPPER = -8220; // $10M
+    int24 constant SSL4_TICK_LOWER = -8220; // $10M
+    int24 constant SSL4_TICK_UPPER = -4140; // $15M
 
     function run() public returns (bytes32, address) {
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
@@ -126,19 +128,25 @@ contract LaunchOracle is Script {
 
         bytes memory governanceFactoryData = abi.encode(address(launchpad));
 
-        // Multicurve: 2 curves
-        Curve[] memory curves = new Curve[](2);
+        // Multicurve: 3 curves (10B prebuy liquidity + 5B early + 35B late = 50B total)
+        Curve[] memory curves = new Curve[](3);
         curves[0] = Curve({
+            tickLower: TICK_200K,
+            tickUpper: TICK_250K,
+            numPositions: 1,
+            shares: 200000000000000000 // 20% (10B tokens)
+        });
+        curves[1] = Curve({
             tickLower: TICK_250K,
             tickUpper: TICK_1M,
             numPositions: 20,
-            shares: 125000000000000000 // 12.5%
+            shares: 100000000000000000 // 10% (5B tokens)
         });
-        curves[1] = Curve({
+        curves[2] = Curve({
             tickLower: TICK_1M,
             tickUpper: TICK_1_5B,
             numPositions: 1,
-            shares: 875000000000000000 // 87.5%
+            shares: 700000000000000000 // 70% (35B tokens)
         });
 
         // Fee beneficiaries
@@ -247,14 +255,17 @@ contract LaunchOracle is Script {
         console.log("Configuration:");
         console.log("- NOICE Price: $0.0005671");
         console.log("- Fee: 2%");
-        console.log("- Public Early: 5B (20 positions, $250K-$998K)");
-        console.log("- Public Late: 35B (single position, $998K-$1.5B)");
+        console.log("- Prebuy Liquidity: 10B (1 position, $200K-$250K)");
+        console.log("- Public Early: 5B (20 positions, $250K-$1M)");
+        console.log("- Public Late: 35B (single position, $1M-$1.5B)");
         console.log("- Prebuy: 10B (exact output, max 200M NOICE, 1yr vesting)");
         console.log("- SSL1: 3.85B @ $252K-$2.5M");
         console.log("- SSL2: 4.46B @ $2.5M-$5M");
         console.log("- SSL3: 4.24B @ $5M-$10M");
         console.log("- SSL4: 2.45B @ $10M-$15M");
+        console.log("- Total SSL: 15B");
         console.log("- Creator: 35B (30B vested 24mo, 5B vested 1d)");
+        console.log("- Total multicurve: 50B (10B + 5B + 35B)");
         console.log("");
 
         // Launch token with atomic prebuy
