@@ -29,9 +29,13 @@ contract DeployNoiceLaunchpad is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 
+        // Get salt from environment (optional, defaults to 0)
+        bytes32 salt = vm.envOr("LAUNCHPAD_SALT", bytes32(uint256(0)));
+
         console2.log("=== Deploy NoiceLaunchpad ===");
         console2.log("Network: Base Mainnet");
         console2.log("Deployer:", deployer);
+        console2.log("Salt:", vm.toString(salt));
         console2.log("");
         console2.log("Deployment Parameters:");
         console2.log("  Airlock:", AIRLOCK);
@@ -43,7 +47,7 @@ contract DeployNoiceLaunchpad is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        NoiceLaunchpad launchpad = new NoiceLaunchpad(
+        NoiceLaunchpad launchpad = new NoiceLaunchpad{salt: salt}(
             Airlock(payable(AIRLOCK)),
             UniversalRouter(payable(UNIVERSAL_ROUTER)),
             ISablierLockup(SABLIER_LOCKUP),
