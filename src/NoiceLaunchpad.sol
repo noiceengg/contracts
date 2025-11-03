@@ -1,35 +1,31 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.24;
 
-import {SafeTransferLib} from "@solady/utils/SafeTransferLib.sol";
-import {OwnableRoles} from "@solady/auth/OwnableRoles.sol";
-import {Airlock, CreateParams, AssetData} from "src/Airlock.sol";
-import {IPoolInitializer} from "src/interfaces/IPoolInitializer.sol";
-import {UniversalRouter} from "@universal-router/UniversalRouter.sol";
-import {ISablierLockup} from "@sablier/v2-core/interfaces/ISablierLockup.sol";
-import {ISablierBatchLockup} from "@sablier/v2-core/interfaces/ISablierBatchLockup.sol";
-import {Lockup, LockupLinear, Broker, BatchLockup} from "@sablier/v2-core/types/DataTypes.sol";
-import {UD60x18} from "@prb/math/src/UD60x18.sol";
-import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {MiniV4Manager} from "src/base/MiniV4Manager.sol";
-import {IPoolManager} from "@v4-core/interfaces/IPoolManager.sol";
-import {Position} from "src/types/Position.sol";
-import {PoolKey} from "@v4-core/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "@v4-core/types/PoolId.sol";
-import {Currency} from "@v4-core/types/Currency.sol";
-import {StateLibrary} from "@v4-core/libraries/StateLibrary.sol";
-import {TickMath} from "@v4-core/libraries/TickMath.sol";
-import {LiquidityAmounts} from "@v4-periphery/libraries/LiquidityAmounts.sol";
-import {UniswapV4MulticurveInitializer} from "src/UniswapV4MulticurveInitializer.sol";
-import {BalanceDelta, BalanceDeltaLibrary} from "@v4-core/types/BalanceDelta.sol";
+import { SafeTransferLib } from "@solady/utils/SafeTransferLib.sol";
+import { OwnableRoles } from "@solady/auth/OwnableRoles.sol";
+import { LibCall } from "@solady/utils/LibCall.sol";
+import { Airlock, CreateParams, AssetData } from "src/Airlock.sol";
+import { IPoolInitializer } from "src/interfaces/IPoolInitializer.sol";
+import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
+import { ISablierLockup } from "@sablier/v2-core/interfaces/ISablierLockup.sol";
+import { ISablierBatchLockup } from "@sablier/v2-core/interfaces/ISablierBatchLockup.sol";
+import { Lockup, LockupLinear, Broker, BatchLockup } from "@sablier/v2-core/types/DataTypes.sol";
+import { UD60x18 } from "@prb/math/src/UD60x18.sol";
+import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
+import { MiniV4Manager } from "src/base/MiniV4Manager.sol";
+import { IPoolManager } from "@v4-core/interfaces/IPoolManager.sol";
+import { Position } from "src/types/Position.sol";
+import { PoolKey } from "@v4-core/types/PoolKey.sol";
+import { PoolId, PoolIdLibrary } from "@v4-core/types/PoolId.sol";
+import { Currency } from "@v4-core/types/Currency.sol";
+import { StateLibrary } from "@v4-core/libraries/StateLibrary.sol";
+import { TickMath } from "@v4-core/libraries/TickMath.sol";
+import { LiquidityAmounts } from "@v4-periphery/libraries/LiquidityAmounts.sol";
+import { UniswapV4MulticurveInitializer } from "src/UniswapV4MulticurveInitializer.sol";
+import { BalanceDelta, BalanceDeltaLibrary } from "@v4-core/types/BalanceDelta.sol";
 
 interface IPermit2 {
-    function approve(
-        address token,
-        address spender,
-        uint160 amount,
-        uint48 expiration
-    ) external;
+    function approve(address token, address spender, uint160 amount, uint48 expiration) external;
 }
 
 /// @notice Thrown when constructor addresses are zero
@@ -40,6 +36,9 @@ error InsufficientTokenBalance();
 
 /// @notice Thrown when LP unlock tranche configuration is invalid
 error InvalidNoiceLpUnlockTranches();
+
+/// @notice Thrown when tokenFactoryData contains vesting configuration
+error TokenFactoryVestingNotSupported();
 
 /// @notice Creator allocation configuration
 /// @param recipient Address receiving allocated tokens
@@ -133,7 +132,7 @@ struct BundleWithVestingParams {
  *
  *    ┌─────────────────────────────────────────┐
  *    │  1. Create token + Doppler multicurve   │
- *    │     uni v4 pool (NOICE as numeraire)        │
+ *    │     uni v4 pool (NOICE as numeraire)    │
  *    └──────────────────┬──────────────────────┘
  *                       │
  *                       ▼
@@ -141,7 +140,7 @@ struct BundleWithVestingParams {
  *    │  2. Allocate tokens to create           │
  *    │     NOICE LP unlock positions           │
  *    │     (out-of-range, unlocks NOICE when   |
-      |            tick range is crossed)       │
+ *       |            tick range is crossed)       │
  *    └──────────────────┬──────────────────────┘
  *                       │
  *                       ▼
@@ -166,18 +165,14 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     UniversalRouter public immutable ROUTER;
     ISablierLockup public immutable SABLIER_LOCKUP;
     ISablierBatchLockup public immutable SABLIER_BATCH_LOCKUP;
-    IPermit2 private constant PERMIT2 =
-        IPermit2(0x000000000022D473030F116dDEE9F6B43aC78BA3);
+    IPermit2 private constant PERMIT2 = IPermit2(0x000000000022D473030F116dDEE9F6B43aC78BA3);
 
     /// @notice Role for executing bundle and withdraw operations
     uint256 public constant EXECUTOR_ROLE = _ROLE_0;
 
-    mapping(address asset => Position[] positions)
-        public noiceLpUnlockPositions;
-    mapping(address asset => mapping(uint256 positionIndex => address recipient))
-        public noiceLpUnlockPositionRecipient;
-    mapping(address asset => mapping(uint256 positionIndex => bool withdrawn))
-        public noiceLpUnlockPositionWithdrawn;
+    mapping(address asset => Position[] positions) public noiceLpUnlockPositions;
+    mapping(address asset => mapping(uint256 positionIndex => address recipient)) public noiceLpUnlockPositionRecipient;
+    mapping(address asset => mapping(uint256 positionIndex => bool withdrawn)) public noiceLpUnlockPositionWithdrawn;
 
     constructor(
         Airlock airlock_,
@@ -188,11 +183,8 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         address owner_
     ) MiniV4Manager(poolManager_) {
         if (
-            address(airlock_) == address(0) ||
-            address(router_) == address(0) ||
-            address(sablierLockup_) == address(0) ||
-            address(sablierBatchLockup_) == address(0) ||
-            owner_ == address(0)
+            address(airlock_) == address(0) || address(router_) == address(0) || address(sablierLockup_) == address(0)
+                || address(sablierBatchLockup_) == address(0) || address(poolManager_) == address(0) || owner_ == address(0)
         ) {
             revert InvalidAddresses();
         }
@@ -213,11 +205,29 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         BundleWithVestingParams calldata params,
         NoicePrebuyParticipant[] calldata noicePrebuyParticipants
     ) external payable onlyRolesOrOwner(EXECUTOR_ROLE) {
+        // Validate tokenFactoryData does not contain vesting configuration
+        (
+            ,
+            ,
+            ,
+            ,
+            // name
+            // symbol
+            // yearlyMintCap
+            // vestingDuration
+            address[] memory vestingRecipients,
+            uint256[] memory vestingAmounts,
+        ) = // tokenURI
+        abi.decode(params.createData.tokenFactoryData, (string, string, uint256, uint256, address[], uint256[], string));
+
+        // Revert if vesting is configured in tokenFactoryData
+        if (vestingRecipients.length > 0 || vestingAmounts.length > 0) {
+            revert TokenFactoryVestingNotSupported();
+        }
+
         uint256 totalCreatorAllocationAmount = 0;
         for (uint256 i = 0; i < params.noiceCreatorAllocations.length; i++) {
-            totalCreatorAllocationAmount += params
-                .noiceCreatorAllocations[i]
-                .amount;
+            totalCreatorAllocationAmount += params.noiceCreatorAllocations[i].amount;
         }
 
         // Compute LP unlock amount from tranches
@@ -229,22 +239,14 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         CreateParams memory createData = params.createData;
         // Solidity 0.8+ will automatically revert on underflow if allocations exceed supply
         createData.numTokensToSell =
-            params.createData.initialSupply -
-            totalCreatorAllocationAmount -
-            noiceLpUnlockAmount;
+            params.createData.initialSupply - totalCreatorAllocationAmount - noiceLpUnlockAmount;
 
         createData.governanceFactoryData = abi.encode(address(this));
 
-        (address asset, , , , ) = AIRLOCK.create(createData);
+        (address asset,,,,) = AIRLOCK.create(createData);
 
-        if (
-            noiceLpUnlockAmount > 0 && params.noiceLpUnlockTranches.length > 0
-        ) {
-            _createNoiceLpUnlockPositions(
-                asset,
-                noiceLpUnlockAmount,
-                params.noiceLpUnlockTranches
-            );
+        if (noiceLpUnlockAmount > 0 && params.noiceLpUnlockTranches.length > 0) {
+            _createNoiceLpUnlockPositions(asset, noiceLpUnlockAmount, params.noiceLpUnlockTranches);
         }
 
         if (params.noiceCreatorAllocations.length > 0) {
@@ -265,10 +267,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     /// @notice Creates batch vesting streams for creator allocations
     /// @param asset Token to vest
     /// @param allocations Array of creator allocation configurations
-    function _initiateCreatorVesting(
-        address asset,
-        NoiceCreatorAllocation[] calldata allocations
-    ) private {
+    function _initiateCreatorVesting(address asset, NoiceCreatorAllocation[] calldata allocations) private {
         uint256 validAllocationCount = 0;
         for (uint256 i = 0; i < allocations.length; i++) {
             if (allocations[i].amount > 0) {
@@ -277,10 +276,8 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         }
 
         if (validAllocationCount > 0) {
-            BatchLockup.CreateWithTimestampsLL[]
-                memory batch = new BatchLockup.CreateWithTimestampsLL[](
-                    validAllocationCount
-                );
+            BatchLockup.CreateWithTimestampsLL[] memory batch =
+                new BatchLockup.CreateWithTimestampsLL[](validAllocationCount);
 
             uint256 batchIndex = 0;
             uint256 totalBatchAmount = 0;
@@ -299,30 +296,17 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
                             end: allocation.lockEndTimestamp
                         }),
                         cliffTime: 0,
-                        unlockAmounts: LockupLinear.UnlockAmounts({
-                            start: 0,
-                            cliff: 0
-                        }),
+                        unlockAmounts: LockupLinear.UnlockAmounts({ start: 0, cliff: 0 }),
                         shape: "linear",
-                        broker: Broker({
-                            account: address(0),
-                            fee: UD60x18.wrap(0)
-                        })
+                        broker: Broker({ account: address(0), fee: UD60x18.wrap(0) })
                     });
                     totalBatchAmount += allocation.amount;
                     batchIndex++;
                 }
             }
 
-            IERC20(asset).approve(
-                address(SABLIER_BATCH_LOCKUP),
-                totalBatchAmount
-            );
-            SABLIER_BATCH_LOCKUP.createWithTimestampsLL(
-                SABLIER_LOCKUP,
-                IERC20(asset),
-                batch
-            );
+            IERC20(asset).approve(address(SABLIER_BATCH_LOCKUP), totalBatchAmount);
+            SABLIER_BATCH_LOCKUP.createWithTimestampsLL(SABLIER_LOCKUP, IERC20(asset), batch);
         }
     }
 
@@ -347,9 +331,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i].noiceAmount > 0) {
                 IERC20(numeraire).transferFrom(
-                    participants[i].lockedAddress,
-                    address(this),
-                    participants[i].noiceAmount
+                    participants[i].lockedAddress, address(this), participants[i].noiceAmount
                 );
                 totalNoice += participants[i].noiceAmount;
             }
@@ -362,12 +344,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
 
         IERC20(numeraire).approve(address(PERMIT2), type(uint256).max);
 
-        PERMIT2.approve(
-            numeraire,
-            address(ROUTER),
-            type(uint160).max,
-            uint48(block.timestamp + 1 hours)
-        );
+        PERMIT2.approve(numeraire, address(ROUTER), type(uint160).max, uint48(block.timestamp + 1 hours));
 
         if (noicePrebuyCommands.length > 0) {
             ROUTER.execute(noicePrebuyCommands, noicePrebuyInputs);
@@ -382,8 +359,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         uint256 validParticipantCount = 0;
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i].noiceAmount > 0) {
-                uint256 participantShare = (totalTokensReceived *
-                    participants[i].noiceAmount) / totalNoice;
+                uint256 participantShare = (totalTokensReceived * participants[i].noiceAmount) / totalNoice;
                 if (participantShare > 0) {
                     validParticipantCount++;
                 }
@@ -391,18 +367,15 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         }
 
         if (validParticipantCount > 0) {
-            BatchLockup.CreateWithTimestampsLL[]
-                memory batch = new BatchLockup.CreateWithTimestampsLL[](
-                    validParticipantCount
-                );
+            BatchLockup.CreateWithTimestampsLL[] memory batch =
+                new BatchLockup.CreateWithTimestampsLL[](validParticipantCount);
 
             uint256 batchIndex = 0;
             uint256 totalBatchAmount = 0;
 
             for (uint256 i = 0; i < participants.length; i++) {
                 if (participants[i].noiceAmount > 0) {
-                    uint256 participantShare = (totalTokensReceived *
-                        participants[i].noiceAmount) / totalNoice;
+                    uint256 participantShare = (totalTokensReceived * participants[i].noiceAmount) / totalNoice;
 
                     if (participantShare > 0) {
                         batch[batchIndex] = BatchLockup.CreateWithTimestampsLL({
@@ -416,15 +389,9 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
                                 end: participants[i].vestingEndTimestamp
                             }),
                             cliffTime: 0,
-                            unlockAmounts: LockupLinear.UnlockAmounts({
-                                start: 0,
-                                cliff: 0
-                            }),
+                            unlockAmounts: LockupLinear.UnlockAmounts({ start: 0, cliff: 0 }),
                             shape: "linear",
-                            broker: Broker({
-                                account: address(0),
-                                fee: UD60x18.wrap(0)
-                            })
+                            broker: Broker({ account: address(0), fee: UD60x18.wrap(0) })
                         });
                         totalBatchAmount += participantShare;
                         batchIndex++;
@@ -432,15 +399,8 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
                 }
             }
 
-            IERC20(asset).approve(
-                address(SABLIER_BATCH_LOCKUP),
-                totalBatchAmount
-            );
-            SABLIER_BATCH_LOCKUP.createWithTimestampsLL(
-                SABLIER_LOCKUP,
-                IERC20(asset),
-                batch
-            );
+            IERC20(asset).approve(address(SABLIER_BATCH_LOCKUP), totalBatchAmount);
+            SABLIER_BATCH_LOCKUP.createWithTimestampsLL(SABLIER_LOCKUP, IERC20(asset), batch);
         }
     }
 
@@ -461,15 +421,12 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
             }
         }
 
-        (, , , , IPoolInitializer poolInitializer, , , , , ) = AIRLOCK
-            .getAssetData(asset);
-        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(
-                address(poolInitializer)
-            );
-        (, , PoolKey memory poolKey, ) = initializer.getState(asset);
+        (,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
+        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(address(poolInitializer));
+        (,, PoolKey memory poolKey,) = initializer.getState(asset);
 
         bool isToken0 = asset == Currency.unwrap(poolKey.currency0);
-        (, int24 currentTick, , ) = poolManager.getSlot0(poolKey.toId());
+        (, int24 currentTick,,) = poolManager.getSlot0(poolKey.toId());
 
         for (uint256 i = 0; i < tranches.length; i++) {
             if (isToken0) {
@@ -489,24 +446,12 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         for (uint256 i = 0; i < tranches.length; i++) {
             NoiceLpUnlockTranche calldata tranche = tranches[i];
 
-            uint160 sqrtPriceLowerX96 = TickMath.getSqrtPriceAtTick(
-                tranche.tickLower
-            );
-            uint160 sqrtPriceUpperX96 = TickMath.getSqrtPriceAtTick(
-                tranche.tickUpper
-            );
+            uint160 sqrtPriceLowerX96 = TickMath.getSqrtPriceAtTick(tranche.tickLower);
+            uint160 sqrtPriceUpperX96 = TickMath.getSqrtPriceAtTick(tranche.tickUpper);
 
             uint128 liquidity = isToken0
-                ? LiquidityAmounts.getLiquidityForAmount0(
-                    sqrtPriceLowerX96,
-                    sqrtPriceUpperX96,
-                    tranche.amount
-                )
-                : LiquidityAmounts.getLiquidityForAmount1(
-                    sqrtPriceLowerX96,
-                    sqrtPriceUpperX96,
-                    tranche.amount
-                );
+                ? LiquidityAmounts.getLiquidityForAmount0(sqrtPriceLowerX96, sqrtPriceUpperX96, tranche.amount)
+                : LiquidityAmounts.getLiquidityForAmount1(sqrtPriceLowerX96, sqrtPriceUpperX96, tranche.amount);
 
             Position memory position = Position({
                 tickLower: tranche.tickLower,
@@ -516,31 +461,51 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
             });
 
             noiceLpUnlockPositions[asset].push(position);
-            noiceLpUnlockPositionRecipient[asset][positionIndex] = tranche
-                .recipient;
+            noiceLpUnlockPositionRecipient[asset][positionIndex] = tranche.recipient;
             positionIndex++;
         }
 
-        IERC20(asset).approve(address(poolManager), noiceLpUnlockAmount);
         _mint(poolKey, noiceLpUnlockPositions[asset]);
     }
 
-    /// @notice Returns all LP unlock positions for an asset
+    /// @notice Returns active (non-withdrawn) LP unlock positions for an asset
     /// @param asset Token address
-    /// @return Array of Position structs
+    /// @return Array of active Position structs
     function getNoiceLpUnlockPositions(
         address asset
     ) external view returns (Position[] memory) {
-        return noiceLpUnlockPositions[asset];
+        Position[] storage allPositions = noiceLpUnlockPositions[asset];
+        uint256 totalPositions = allPositions.length;
+
+        Position[] memory activePositions = new Position[](totalPositions);
+        uint256 activeCount = 0;
+
+        for (uint256 i = 0; i < totalPositions; i++) {
+            if (!noiceLpUnlockPositionWithdrawn[asset][i]) {
+                activePositions[activeCount] = allPositions[i];
+                activeCount++;
+            }
+        }
+
+        return activePositions;
     }
 
-    /// @notice Returns the number of LP unlock positions for an asset
+    /// @notice Returns the number of active (non-withdrawn) LP unlock positions for an asset
     /// @param asset Token address
-    /// @return Position count
+    /// @return Active position count
     function getNoiceLpUnlockPositionCount(
         address asset
     ) external view returns (uint256) {
-        return noiceLpUnlockPositions[asset].length;
+        uint256 totalPositions = noiceLpUnlockPositions[asset].length;
+        uint256 activeCount = 0;
+
+        for (uint256 i = 0; i < totalPositions; i++) {
+            if (!noiceLpUnlockPositionWithdrawn[asset][i]) {
+                activeCount++;
+            }
+        }
+
+        return activeCount;
     }
 
     /// @notice Burns LP unlock position and transfers accumulated NOICE to specified recipient
@@ -554,44 +519,20 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         uint256 positionIndex,
         address recipient
     ) external onlyRolesOrOwner(EXECUTOR_ROLE) {
-        require(
-            !noiceLpUnlockPositionWithdrawn[asset][positionIndex],
-            "Already withdrawn"
-        );
-        require(
-            positionIndex < noiceLpUnlockPositions[asset].length,
-            "Invalid position index"
-        );
+        require(!noiceLpUnlockPositionWithdrawn[asset][positionIndex], "Already withdrawn");
+        require(positionIndex < noiceLpUnlockPositions[asset].length, "Invalid position index");
 
-        (
-            address numeraire,
-            ,
-            ,
-            ,
-            IPoolInitializer poolInitializer,
-            ,
-            ,
-            ,
-            ,
-
-        ) = AIRLOCK.getAssetData(asset);
-        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(
-                address(poolInitializer)
-            );
-        (, , PoolKey memory poolKey, ) = initializer.getState(asset);
+        (address numeraire,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
+        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(address(poolInitializer));
+        (,, PoolKey memory poolKey,) = initializer.getState(asset);
 
         Position[] memory positionsToBurn = new Position[](1);
         positionsToBurn[0] = noiceLpUnlockPositions[asset][positionIndex];
 
-        uint256 numeraireBalanceBefore = IERC20(numeraire).balanceOf(
-            address(this)
-        );
+        uint256 numeraireBalanceBefore = IERC20(numeraire).balanceOf(address(this));
         _burn(poolKey, positionsToBurn);
-        uint256 numeraireBalanceAfter = IERC20(numeraire).balanceOf(
-            address(this)
-        );
-        uint256 numeraireReceived = numeraireBalanceAfter -
-            numeraireBalanceBefore;
+        uint256 numeraireBalanceAfter = IERC20(numeraire).balanceOf(address(this));
+        uint256 numeraireReceived = numeraireBalanceAfter - numeraireBalanceBefore;
 
         noiceLpUnlockPositionWithdrawn[asset][positionIndex] = true;
 
@@ -619,13 +560,19 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         if (token == address(0)) {
             SafeTransferLib.safeTransferETH(to, address(this).balance);
         } else {
-            SafeTransferLib.safeTransfer(
-                token,
-                to,
-                SafeTransferLib.balanceOf(token, address(this))
-            );
+            SafeTransferLib.safeTransfer(token, to, SafeTransferLib.balanceOf(token, address(this)));
         }
     }
 
-    receive() external payable {}
+    /// @notice Execute arbitrary batch calldata from the contract
+    /// @dev Only callable by owner for emergency operations or contract interactions
+    function execute(address[] calldata targets, uint256[] calldata values, bytes[] calldata data) external payable onlyOwner returns (bytes[] memory results) {
+        require(targets.length == values.length && targets.length == data.length, "Length mismatch");
+        results = new bytes[](targets.length);
+        for (uint256 i = 0; i < targets.length; i++) {
+            results[i] = LibCall.callContract(targets[i], values[i], data[i]);
+        }
+    }
+
+    receive() external payable { }
 }

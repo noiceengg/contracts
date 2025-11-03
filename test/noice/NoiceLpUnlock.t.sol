@@ -38,67 +38,7 @@ contract NoiceLpUnlockTest is NoiceBaseTest {
     address public recipient3 = makeAddr("recipient3");
     address public latestAsset;
 
-    // Override setUp to use TestMulticurveHook for valid tranche tests
-    bool public useTestHook = false;
-
-    function setUp() public override virtual {
-        if (!useTestHook) {
-            // Use default setup from NoiceBaseTest
-            super.setUp();
-        } else {
-            // Use TestMulticurveHook setup (like NoiceLpUnlockIntegration)
-            _setUpWithTestHook();
-        }
-    }
-
-    function _setUpWithTestHook() internal {
-        // Fork Base mainnet
-        string memory rpcUrl = vm.envString("BASE_MAINNET_RPC_URL");
-        vm.createSelectFork(rpcUrl);
-
-        // Initialize external contracts
-        airlock = Airlock(payable(AIRLOCK));
-        router = UniversalRouter(payable(UNIVERSAL_ROUTER));
-        sablierLockup = ISablierLockup(SABLIER_LOCKUP);
-        sablierBatchLockup = ISablierBatchLockup(SABLIER_BATCH_LOCKUP);
-        poolManager = IPoolManager(POOL_MANAGER);
-
-        // Deploy test contracts
-        governanceFactory = new TeamGovernanceFactory();
-        tokenFactory = new TokenFactory(address(airlock));
-        noOpMigrator = new NoOpMigrator(address(airlock));
-
-        // Calculate hook address with correct permissions first
-        address hookAddress = address(
-            uint160(
-                Hooks.BEFORE_INITIALIZE_FLAG | Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG
-                    | Hooks.AFTER_REMOVE_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
-            ) ^ (0x4444 << 144)
-        );
-
-        // Deploy multicurve initializer first (with reference to hook address)
-        multicurveInitializer = new UniswapV4MulticurveInitializer(
-            address(airlock), poolManager, UniswapV4MulticurveInitializerHook(hookAddress)
-        );
-
-        // Deploy launchpad
-        launchpad = new NoiceLaunchpad(airlock, router, sablierLockup, sablierBatchLockup, poolManager, address(this));
-
-        // Deploy custom hook that whitelists both initializer AND launchpad
-        deployCodeTo(
-            "TestMulticurveHook",
-            abi.encode(poolManager, address(multicurveInitializer), address(launchpad)),
-            hookAddress
-        );
-
-        hook = UniswapV4MulticurveInitializerHook(hookAddress);
-
-        // Register modules with Airlock
-        _registerAirlockModules();
-    }
-
     function test_LpUnlock_NoTranches() public {
-
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
         BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, new NoiceLpUnlockTranche[](0));
         NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
@@ -110,21 +50,16 @@ contract NoiceLpUnlockTest is NoiceBaseTest {
         // Verify no positions created
         uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 0, "Should have 0 LP unlock positions");
-
     }
 
     function test_LpUnlock_PercentageCalculation() public {
-
         uint256 unlockPercentage = 1000; // 10%
         uint256 expectedAmount = TOTAL_SUPPLY * unlockPercentage / 10_000; // 10B tokens
 
-
         assertEq(expectedAmount, 10_000_000_000e18, "Should be 10B tokens");
-
     }
 
     function test_LpUnlock_TrancheAllocation() public {
-
         uint256 unlockPercentage = 1500; // 15%
         uint256 totalUnlockAmount = TOTAL_SUPPLY * unlockPercentage / 10_000; // 15B tokens
 
@@ -133,14 +68,11 @@ contract NoiceLpUnlockTest is NoiceBaseTest {
         uint256 tranche2 = totalUnlockAmount * 35 / 100; // 5.25B
         uint256 tranche3 = totalUnlockAmount * 25 / 100; // 3.75B
 
-
         uint256 totalAllocated = tranche1 + tranche2 + tranche3;
         assertEq(totalAllocated, totalUnlockAmount, "Tranches should sum to total");
-
     }
 
     function test_LpUnlock_InvalidTickRange() public {
-
         uint256 unlockPercentage = 1000; // 10%
         uint256 expectedAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
@@ -159,11 +91,9 @@ contract NoiceLpUnlockTest is NoiceBaseTest {
 
         vm.expectRevert(abi.encodeWithSignature("InvalidNoiceLpUnlockTranches()"));
         launchpad.bundleWithCreatorVesting(params, participants);
-
     }
 
     function test_LpUnlock_ExceedsTotalSupply() public {
-
         // Create LP unlock that exceeds total supply
         // Will revert with arithmetic underflow (Solidity 0.8+ panic)
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
@@ -180,7 +110,28 @@ contract NoiceLpUnlockTest is NoiceBaseTest {
 
         vm.expectRevert();
         launchpad.bundleWithCreatorVesting(params, participants);
+    }
 
+    function test_LpUnlock_TokenFactoryVestingNotSupported() public {
+        // Create tokenFactoryData with vesting configuration
+        address[] memory vestRecipients = new address[](1);
+        vestRecipients[0] = recipient1;
+        uint256[] memory vestAmounts = new uint256[](1);
+        vestAmounts[0] = 10_000_000_000e18; // 10B tokens vested
+
+        bytes memory tokenFactoryDataWithVesting =
+            abi.encode("Test Token", "TEST", uint256(0), uint256(0), vestRecipients, vestAmounts, "");
+
+        // Create bundle params with vesting in tokenFactoryData
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
+        params.createData.tokenFactoryData = tokenFactoryDataWithVesting;
+
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
+
+        // Should revert with TokenFactoryVestingNotSupported
+        vm.expectRevert(abi.encodeWithSignature("TokenFactoryVestingNotSupported()"));
+        launchpad.bundleWithCreatorVesting(params, participants);
     }
 }
 
@@ -193,21 +144,13 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
 
-    function setUp() public override virtual {
-        // Enable test hook for this contract
-        useTestHook = true;
-        super.setUp();
-    }
-
     function test_LpUnlock_ValidTranches_SingleTranche() public {
-
         uint256 unlockPercentage = 1000; // 10%
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000; // 10B tokens
 
         // Define tick range - positions BELOW current tick (asset is token1, tick ~20040)
         int24 tickLower = 10_020; // Multiple of 60
         int24 tickUpper = 19_980; // Multiple of 60, below current tick
-
 
         // Create valid tranches
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
@@ -255,11 +198,9 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
         // Verify recipient mapping
         address storedRecipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, 0);
         assertEq(storedRecipient, recipient1, "Recipient mismatch");
-
     }
 
     function test_LpUnlock_ValidTranches_MultipleTranches() public {
-
         uint256 unlockPercentage = 1500; // 15%
         uint256 totalTokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000; // 15B tokens
 
@@ -268,7 +209,6 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
         int24[3] memory tickUppers = [int24(18_000), int24(13_980), int24(9000)];
         address[3] memory recipients = [recipient1, recipient2, recipient3];
         uint256[3] memory tokenShares = [uint256(40), 35, 25]; // Percentage shares
-
 
         // Create tranches with token amounts
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](3);
@@ -281,7 +221,6 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
                 tickUpper: tickUppers[i],
                 recipient: recipients[i]
             });
-
         }
 
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
@@ -318,13 +257,10 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
             assertGt(actualLiquidity, 0, "Launchpad should own liquidity");
             // Verify stored liquidity matches actual
             assertEq(positions[i].liquidity, actualLiquidity, "Stored liquidity should match actual");
-
         }
-
     }
 
     function test_LpUnlock_ValidTranches_WithdrawalFlow() public {
-
         uint256 unlockPercentage = 1000; // 10%
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
@@ -348,10 +284,8 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
-
         // Owner withdraws to recipient1
         launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
-
 
         // Verify position marked as withdrawn
         bool isWithdrawn = launchpad.noiceLpUnlockPositionWithdrawn(latestAsset, 0);
@@ -360,6 +294,95 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
         // Try to withdraw again - should fail
         vm.expectRevert("Already withdrawn");
         launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+    }
 
+    function test_LpUnlock_ViewFunctionsFilterWithdrawn() public {
+        uint256 unlockPercentage = 1500; // 15%
+        uint256 totalTokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
+
+        // Create 3 tranches
+        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](3);
+        tranches[0] = NoiceLpUnlockTranche({
+            amount: totalTokenAmount * 40 / 100,
+            tickLower: 15_000,
+            tickUpper: 18_000,
+            recipient: recipient1
+        });
+        tranches[1] = NoiceLpUnlockTranche({
+            amount: totalTokenAmount * 35 / 100,
+            tickLower: 10_020,
+            tickUpper: 13_980,
+            recipient: recipient2
+        });
+        tranches[2] = NoiceLpUnlockTranche({
+            amount: totalTokenAmount * 25 / 100,
+            tickLower: 5040,
+            tickUpper: 9000,
+            recipient: recipient3
+        });
+
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
+
+        launchpad.bundleWithCreatorVesting(params, participants);
+        latestAsset = _computeAssetAddress(params.createData.salt);
+
+        // Initially: all 3 positions should be returned
+        uint256 countBefore = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        assertEq(countBefore, 3, "Should have 3 active positions initially");
+
+        Position[] memory positionsBefore = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        assertEq(positionsBefore.length, 3, "Should return 3 positions initially");
+
+        // Verify all positions have non-zero liquidity
+        for (uint256 i = 0; i < 3; i++) {
+            assertGt(positionsBefore[i].liquidity, 0, "Position should have liquidity");
+        }
+
+        // Withdraw position at index 1 (middle position)
+        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 1, recipient2);
+
+        // After withdrawal: only 2 active positions should be returned
+        uint256 countAfter = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        assertEq(countAfter, 2, "Should have 2 active positions after withdrawal");
+
+        Position[] memory positionsAfter = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        assertEq(positionsAfter.length, 3, "Array length is total positions");
+
+        // Active positions are packed at beginning: [pos0, pos2, empty]
+        assertGt(positionsAfter[0].liquidity, 0, "Position 0 should still have liquidity");
+        assertGt(positionsAfter[1].liquidity, 0, "Position 2 should be packed at index 1");
+        assertEq(positionsAfter[2].liquidity, 0, "Index 2 should be empty");
+
+        // Withdraw position at index 0
+        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+
+        // After second withdrawal: only 1 active position
+        uint256 countFinal = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        assertEq(countFinal, 1, "Should have 1 active position after second withdrawal");
+
+        Position[] memory positionsFinal = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        assertEq(positionsFinal.length, 3, "Array length is still total positions");
+
+        // Active positions are packed at beginning: [pos2, empty, empty]
+        assertGt(positionsFinal[0].liquidity, 0, "Position 2 should be packed at index 0");
+        assertEq(positionsFinal[1].liquidity, 0, "Index 1 should be empty");
+        assertEq(positionsFinal[2].liquidity, 0, "Index 2 should be empty");
+
+        // Withdraw last position
+        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 2, recipient3);
+
+        // After all withdrawals: 0 active positions
+        uint256 countEmpty = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        assertEq(countEmpty, 0, "Should have 0 active positions after all withdrawals");
+
+        Position[] memory positionsEmpty = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        assertEq(positionsEmpty.length, 3, "Array length is still total positions");
+
+        // All positions should be empty
+        for (uint256 i = 0; i < 3; i++) {
+            assertEq(positionsEmpty[i].liquidity, 0, "All positions should be empty");
+        }
     }
 }

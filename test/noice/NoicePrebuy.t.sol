@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
-import {NoiceBaseTest} from "./NoiceBaseTest.sol";
-import {BundleWithVestingParams, NoiceCreatorAllocation, NoicePrebuyParticipant, NoiceLpUnlockTranche} from "src/NoiceLaunchpad.sol";
-import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
-import {Commands} from "@universal-router/libraries/Commands.sol";
-import {Actions} from "@v4-periphery/libraries/Actions.sol";
-import {PoolKey} from "@v4-core/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "@v4-core/types/PoolId.sol";
-import {Currency, CurrencyLibrary} from "@v4-core/types/Currency.sol";
-import {Planner, Plan} from "lib/v4-periphery/test/shared/Planner.sol";
-import {IV4Router} from "@v4-periphery/interfaces/IV4Router.sol";
+import { NoiceBaseTest } from "./NoiceBaseTest.sol";
+import {
+    BundleWithVestingParams,
+    NoiceCreatorAllocation,
+    NoicePrebuyParticipant,
+    NoiceLpUnlockTranche
+} from "src/NoiceLaunchpad.sol";
+import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
+import { Commands } from "@universal-router/libraries/Commands.sol";
+import { Actions } from "@v4-periphery/libraries/Actions.sol";
+import { PoolKey } from "@v4-core/types/PoolKey.sol";
+import { PoolId, PoolIdLibrary } from "@v4-core/types/PoolId.sol";
+import { Currency, CurrencyLibrary } from "@v4-core/types/Currency.sol";
+import { Planner, Plan } from "lib/v4-periphery/test/shared/Planner.sol";
+import { IV4Router } from "@v4-periphery/interfaces/IV4Router.sol";
 
 interface IPermit2 {
-    function approve(
-        address token,
-        address spender,
-        uint160 amount,
-        uint48 expiration
-    ) external;
+    function approve(address token, address spender, uint160 amount, uint48 expiration) external;
 }
 
 /**
@@ -43,13 +43,9 @@ contract NoicePrebuyTest is NoiceBaseTest {
     }
 
     function test_Prebuy_NoParticipants() public {
-        NoiceCreatorAllocation[]
-            memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(
-            noiceCreatorLocks
-        );
-        NoicePrebuyParticipant[]
-            memory participants = new NoicePrebuyParticipant[](0);
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
 
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
@@ -59,17 +55,12 @@ contract NoicePrebuyTest is NoiceBaseTest {
 
         // Should not create any streams
         uint256 nextStreamIdAfter = sablierLockup.nextStreamId();
-        assertEq(
-            nextStreamIdAfter,
-            nextStreamIdBefore,
-            "Should not create any prebuy streams"
-        );
+        assertEq(nextStreamIdAfter, nextStreamIdBefore, "Should not create any prebuy streams");
     }
 
     function test_Prebuy_ZeroNoiceAmount() public {
         // Participant with 0 NOICE amount should not create stream
-        NoicePrebuyParticipant[]
-            memory participants = new NoicePrebuyParticipant[](1);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](1);
         participants[0] = NoicePrebuyParticipant({
             lockedAddress: participant1,
             noiceAmount: 0, // Zero NOICE
@@ -78,11 +69,8 @@ contract NoicePrebuyTest is NoiceBaseTest {
             vestingRecipient: participant1
         });
 
-        NoiceCreatorAllocation[]
-            memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(
-            noiceCreatorLocks
-        );
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
 
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
@@ -92,11 +80,7 @@ contract NoicePrebuyTest is NoiceBaseTest {
 
         // Should not create any streams (early return due to totalNoice == 0)
         uint256 nextStreamIdAfter = sablierLockup.nextStreamId();
-        assertEq(
-            nextStreamIdAfter,
-            nextStreamIdBefore,
-            "Should not create streams for zero NOICE"
-        );
+        assertEq(nextStreamIdAfter, nextStreamIdBefore, "Should not create streams for zero NOICE");
     }
 
     // Note: Invalid vesting timestamps are now validated by Sablier, not by NoiceLaunchpad
@@ -113,8 +97,7 @@ contract NoicePrebuyTest is NoiceBaseTest {
         vm.prank(participant2);
         IERC20(NOICE_TOKEN).approve(address(launchpad), amount2);
 
-        NoicePrebuyParticipant[]
-            memory participants = new NoicePrebuyParticipant[](2);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](2);
         participants[0] = NoicePrebuyParticipant({
             lockedAddress: participant1,
             noiceAmount: amount1,
@@ -130,62 +113,35 @@ contract NoicePrebuyTest is NoiceBaseTest {
             vestingRecipient: participant2
         });
 
-        NoiceCreatorAllocation[]
-            memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(
-            noiceCreatorLocks
-        );
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
 
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
-        uint256 participant1NoiceBefore = IERC20(NOICE_TOKEN).balanceOf(
-            participant1
-        );
-        uint256 participant2NoiceBefore = IERC20(NOICE_TOKEN).balanceOf(
-            participant2
-        );
+        uint256 participant1NoiceBefore = IERC20(NOICE_TOKEN).balanceOf(participant1);
+        uint256 participant2NoiceBefore = IERC20(NOICE_TOKEN).balanceOf(participant2);
 
         launchpad.bundleWithCreatorVesting(params, participants);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Verify NOICE was collected from participants
-        uint256 participant1NoiceAfter = IERC20(NOICE_TOKEN).balanceOf(
-            participant1
-        );
-        uint256 participant2NoiceAfter = IERC20(NOICE_TOKEN).balanceOf(
-            participant2
-        );
+        uint256 participant1NoiceAfter = IERC20(NOICE_TOKEN).balanceOf(participant1);
+        uint256 participant2NoiceAfter = IERC20(NOICE_TOKEN).balanceOf(participant2);
 
-        assertEq(
-            participant1NoiceBefore - participant1NoiceAfter,
-            amount1,
-            "Participant1 NOICE should be collected"
-        );
-        assertEq(
-            participant2NoiceBefore - participant2NoiceAfter,
-            amount2,
-            "Participant2 NOICE should be collected"
-        );
+        assertEq(participant1NoiceBefore - participant1NoiceAfter, amount1, "Participant1 NOICE should be collected");
+        assertEq(participant2NoiceBefore - participant2NoiceAfter, amount2, "Participant2 NOICE should be collected");
 
         // Without swap commands, no tokens received, so no streams created (early return)
         uint256 nextStreamIdAfter = sablierLockup.nextStreamId();
-        assertEq(
-            nextStreamIdAfter,
-            nextStreamIdBefore,
-            "Should not create streams (no swap executed)"
-        );
+        assertEq(nextStreamIdAfter, nextStreamIdBefore, "Should not create streams (no swap executed)");
     }
 
     function test_Prebuy_ManualSwapAfterLaunch() public {
         // Step 1: Launch token without any prebuy participants
-        NoiceCreatorAllocation[]
-            memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(
-            noiceCreatorLocks
-        );
-        NoicePrebuyParticipant[]
-            memory participants = new NoicePrebuyParticipant[](0);
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
 
         launchpad.bundleWithCreatorVesting(params, participants);
 
@@ -206,11 +162,8 @@ contract NoicePrebuyTest is NoiceBaseTest {
         bytes[] memory inputs = new bytes[](1);
 
         // Encode V4Router actions
-        bytes memory actions = abi.encodePacked(
-            uint8(Actions.SWAP_EXACT_IN_SINGLE),
-            uint8(Actions.SETTLE_ALL),
-            uint8(Actions.TAKE_ALL)
-        );
+        bytes memory actions =
+            abi.encodePacked(uint8(Actions.SWAP_EXACT_IN_SINGLE), uint8(Actions.SETTLE_ALL), uint8(Actions.TAKE_ALL));
 
         // Prepare parameters for each action
         bytes[] memory actionParams = new bytes[](3);
@@ -227,15 +180,11 @@ contract NoicePrebuyTest is NoiceBaseTest {
         );
 
         // actionParams[1]: SETTLE_ALL params (currency, amount)
-        Currency currencyIn = zeroForOne
-            ? poolKey.currency0
-            : poolKey.currency1;
+        Currency currencyIn = zeroForOne ? poolKey.currency0 : poolKey.currency1;
         actionParams[1] = abi.encode(currencyIn, swapAmount);
 
         // actionParams[2]: TAKE_ALL params (currency, minAmount)
-        Currency currencyOut = zeroForOne
-            ? poolKey.currency1
-            : poolKey.currency0;
+        Currency currencyOut = zeroForOne ? poolKey.currency1 : poolKey.currency0;
         actionParams[2] = abi.encode(currencyOut, uint256(0));
 
         // Combine actions and params into inputs
@@ -250,12 +199,7 @@ contract NoicePrebuyTest is NoiceBaseTest {
         IERC20(NOICE_TOKEN).approve(address(permit2), type(uint256).max);
 
         // Step 2: Approve router via Permit2 with expiration
-        permit2.approve(
-            NOICE_TOKEN,
-            address(router),
-            type(uint160).max,
-            uint48(block.timestamp + 1 hours)
-        );
+        permit2.approve(NOICE_TOKEN, address(router), type(uint160).max, uint48(block.timestamp + 1 hours));
 
         uint256 assetBalanceBefore = IERC20(latestAsset).balanceOf(deployer);
         uint256 noiceBalanceBefore = IERC20(NOICE_TOKEN).balanceOf(deployer);
@@ -270,15 +214,12 @@ contract NoicePrebuyTest is NoiceBaseTest {
 
     function test_Prebuy_100Participants() public {
         // Create 100 participants
-        NoicePrebuyParticipant[]
-            memory participants = new NoicePrebuyParticipant[](100);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](100);
 
         uint256 totalNoiceAmount = 0;
 
         for (uint256 i = 0; i < 100; i++) {
-            address participant = makeAddr(
-                string(abi.encodePacked("participant", i))
-            );
+            address participant = makeAddr(string(abi.encodePacked("participant", i)));
             uint256 noiceAmount = (i + 1) * 1000e18; // 1K, 2K, 3K, ..., 100K NOICE
 
             // Fund participant
@@ -301,11 +242,8 @@ contract NoicePrebuyTest is NoiceBaseTest {
         }
 
         // Create bundle params
-        NoiceCreatorAllocation[]
-            memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(
-            noiceCreatorLocks
-        );
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
 
         // Compute asset address
         latestAsset = _computeAssetAddress(params.createData.salt);
@@ -326,22 +264,15 @@ contract NoicePrebuyTest is NoiceBaseTest {
         PoolId myPoolId = poolKey.toId();
 
         // Build V4 swap: NOICE -> Asset (exact input)
-        bytes memory actions = abi.encodePacked(
-            uint8(Actions.SWAP_EXACT_IN_SINGLE),
-            uint8(Actions.SETTLE_ALL),
-            uint8(Actions.TAKE_ALL)
-        );
+        bytes memory actions =
+            abi.encodePacked(uint8(Actions.SWAP_EXACT_IN_SINGLE), uint8(Actions.SETTLE_ALL), uint8(Actions.TAKE_ALL));
 
         bytes[] memory actionParams = new bytes[](3);
 
         // Determine swap direction
         bool zeroForOne = !isToken0; // swapping NOICE for asset
-        Currency currencyIn = zeroForOne
-            ? poolKey.currency0
-            : poolKey.currency1;
-        Currency currencyOut = zeroForOne
-            ? poolKey.currency1
-            : poolKey.currency0;
+        Currency currencyIn = zeroForOne ? poolKey.currency0 : poolKey.currency1;
+        Currency currencyOut = zeroForOne ? poolKey.currency1 : poolKey.currency0;
 
         // actionParams[0]: ExactInputSingleParams
         actionParams[0] = abi.encode(
@@ -375,9 +306,7 @@ contract NoicePrebuyTest is NoiceBaseTest {
         // Store balances before launch
         uint256[] memory balancesBefore = new uint256[](100);
         for (uint256 i = 0; i < 100; i++) {
-            address participant = makeAddr(
-                string(abi.encodePacked("participant", i))
-            );
+            address participant = makeAddr(string(abi.encodePacked("participant", i)));
             balancesBefore[i] = IERC20(NOICE_TOKEN).balanceOf(participant);
         }
 
@@ -386,25 +315,15 @@ contract NoicePrebuyTest is NoiceBaseTest {
         // Verify NOICE was collected from all participants
         uint256 totalCollected = 0;
         for (uint256 i = 0; i < 100; i++) {
-            address participant = makeAddr(
-                string(abi.encodePacked("participant", i))
-            );
+            address participant = makeAddr(string(abi.encodePacked("participant", i)));
             uint256 balanceAfter = IERC20(NOICE_TOKEN).balanceOf(participant);
             uint256 collected = balancesBefore[i] - balanceAfter;
             totalCollected += collected;
 
-            assertEq(
-                balanceAfter,
-                0,
-                "Participant should have 0 NOICE after collection"
-            );
+            assertEq(balanceAfter, 0, "Participant should have 0 NOICE after collection");
             assertEq(collected, (i + 1) * 1000e18, "Collected amount mismatch");
         }
 
-        assertEq(
-            totalCollected,
-            totalNoiceAmount,
-            "Total collected should match total NOICE"
-        );
+        assertEq(totalCollected, totalNoiceAmount, "Total collected should match total NOICE");
     }
 }
