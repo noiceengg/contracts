@@ -1,73 +1,78 @@
-# Doppler
+# NoiceLaunchpad
+Noice Launchpad is a permissioned launchpad built on top of Doppler Multicurve and Uniswap V4 for sniper protection during early growth phase.
 
-[![Test](https://github.com/whetstoneresearch/doppler/actions/workflows/test.yml/badge.svg)](https://github.com/whetstoneresearch/doppler/actions/workflows/test.yml)
 
-This reposity contains the [Doppler](docs/Doppler.md) Protocol along with the [Airlock](/docs/Airlock.md) contracts You can learn more about the technical aspects in the [documentation](https://docs.doppler.lol).
+## Acknowledgement
 
-## Deployments
+This codebase is a fork of [Doppler](https://github.com/whetstoneresearch/doppler) at commit [`204d121`](https://github.com/whetstoneresearch/doppler/commit/204d1217c9a633cfe1f9b8da63feb649d0a9aa04).
+The NoiceLaunchpad currently extends Doppler's Multicurve contracts, and hence forking from the multicurve contracts have been helpful with tests and scripting.
 
-Latest deployments can be found [here](./Deployments.md), which is a mirror of the [documentation page](https://docs.doppler.lol/resources/contract-addresses). For historical deployments, you can check the [deployments](./deployments/) folder, which contains the deployment logs for each network.
 
-## Usage
+## Core Features
 
-### Installation
+  ### 1. Multicurve
 
-First, you will need to install [Foundry](https://book.getfoundry.sh/getting-started/installation) if you don't already have it. Then, run the following commands:
+  [Doppler's
+  Multicurve](https://www.doppler.lol/multicurve.pdf) is a liquidity allocation strategy that stacks liquidity in tick ranges on top of each other to form a curve where liquidity in any given tick range is strictly increasing. This design significantly increases the cost of acquiring tokens within those ranges compared to a constant liquidity position. By concentrating liquidity more densely as price increases, Multicurve creates a more efficient price discovery mechanism and provides better protection against sudden price movements.
 
-```shell
-# Clone the repository
-$ git clone git@github.com:whetstoneresearch/doppler.git
+  ### 2. Creator Vesting with Linear Lockup
 
-# Install the dependencies
-$ make install
+  Noice Launchpad prioritizes creators by allocating them the highest portion of the token supply, secured through linear vesting schedules. This ensures creators remain aligned with the long-term success of their project while maintaining meaningful ownership. Creators also have the flexibility to delegate portions of their vested allocation to team members or collaborators, with the same vesting parameters applied to delegated amounts.
+
+  ### 3. Prebuy Mechanism with Vesting
+
+  The launchpad implements a prebuy mechanism that allows early participants to commit quote tokens (i.e. NOICE) before the token launch. Once the token is launched, the launchpad automatically executes purchases at the earliest price range on
+  behalf of prebuy participants. These acquired tokens are then distributed to participants with vesting schedules, incentivizing early support and promoting long-term holding.
+
+  ### 4. Single-Sided Liquidity Positions (SSL)
+
+  The launchpad supports single-sided liquidity positions that enable creators to raise additional capital as
+  their token appreciates. Creators can place their launched tokens in out-of-range liquidity positions at
+  higher price points. As the token price crosses these milestones and enters the liquidity ranges, the tokens are gradually sold for the quote token, providing creators with progressive funding tied directly to their token's price progression.
+### Launch Flow
+
+```
+┌─────────────────────────────────────────┐
+│  1. Create token + Doppler multicurve   │
+│     Uniswap v4 pool (NOICE as quote)    │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│  2. Allocate tokens to create           │
+│     NOICE LP unlock positions           │
+│     (SSL: out-of-range positions that   │
+│      unlock NOICE when crossed)         │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│  3. Allocate tokens for creator         │
+│     allocations (with Sablier vesting)  │
+└──────────────────┬──────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────┐
+│  4. Execute prebuy: swap NOICE → Token  │
+│     and distribute with vesting         │
+└─────────────────────────────────────────┘
 ```
 
-### Testing
+### Key Components
 
-```shell
-# Copy the example a .env file and fill the RPC endpoints
-$ cp .env.example .env
+- **Airlock**: Doppler's Airlock contract for token creation and pool initialization
+- **MiniV4Manager**: Base contract providing Uniswap v4 position management
+- **UniswapV4MulticurveInitializer**: Doppler's util that handles multicurve liquidity initialization
+- **UniversalRouter**: Executes token swaps for the prebuy mechanism
+- **Sablier**: Manages all vesting streams for creators and prebuy participants
 
-# Then run the tests
-$ make test
+## Security
 
-# You can also only run the invariant tests
-$ make fuzz
+### Audit
 
-# And even run longer fuzz tests
-$ make deep-fuzz
-```
+NoiceLaunchpad has been audited by **Pashov Audit Group**.
 
-Tests can be tweaked from the `.env` file, this is a nice way to try different testing scenarios without recompiling the contracts:
-
-```shell
-IS_TOKEN_0=FALSE
-USING_ETH=FALSE
-FEE=30
-```
-
-### Deploying
-
-Deployment scripts are provided to either deploy the whole protocol or only some specific modules, if you find them in the [script](/script) folder. Note that you will also need to install [Bun](https://bun.sh/), as some internal scripts are written in TypeScript to update the deploment logs and the documentation.
-
-Then make sure to set the required environment variables in the `.env` file before running the deployment scripts, once you're done, you can run the following command to deploy the contracts:
-
-```shell
-# Deploy the protocol on Base
-make deploy-base
-
-# Deploy the protocol on Unichain
-make deploy-unichain
-
-# Deploy the protocol on Ink
-make deploy-ink
-
-# Deploy V4 support on Base
-make deploy-v4-base
-
-# Deploy V4 support on Unichain
-make deploy-v4-unichain
-
-# Deploy V4 support on Ink
-make deploy-v4-ink
-```
+- **Audit Period**: October 10, 2025 - October 13, 2025
+- **Audited Commit**: [`4d7e8c2`](https://github.com/noiceengg/noice-launchpad/commit/4d7e8c22cd7bb7404c0747da85a8c21878e41b3a)
+- **Audit Report**: attached [here](audits/NoiceLaunchpad-security-review_2025-10-11.pdf)
+- **Remediation PR**: [Audit Fixes](https://github.com/noiceengg/noice-launchpad/pull/1)
