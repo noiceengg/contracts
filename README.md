@@ -1,11 +1,11 @@
-# NoiceLaunchpad
-Noice Launchpad is a permissioned launchpad built on top of Doppler Multicurve and Uniswap V4 for sniper protection during early growth phase.
+# Noice Launchpad Contracts 
+Noice Launchpad is a permissioned launchpad built on top of [Doppler Multicurve](https://doppler.lol/multicurve.pdf) and Uniswap V4 for sniper protection during early growth phase.
 
 
 ## Acknowledgement
 
 This codebase is a fork of [Doppler](https://github.com/whetstoneresearch/doppler) at commit [`204d121`](https://github.com/whetstoneresearch/doppler/commit/204d1217c9a633cfe1f9b8da63feb649d0a9aa04).
-The NoiceLaunchpad currently extends Doppler's Multicurve contracts, and hence forking from the multicurve contracts have been helpful with tests and scripting.
+The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence forking from the multicurve contracts have been helpful with tests and scripting.
 
 
 ## Core Features
@@ -22,7 +22,7 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts, and hence f
   ### 3. Prebuy Mechanism with Vesting
 
   The launchpad implements a prebuy mechanism that allows early participants to commit quote tokens (i.e. NOICE) before the token launch. Once the token is launched, the launchpad automatically executes purchases at the earliest price range on
-  behalf of prebuy participants. These acquired tokens are then distributed to participants with vesting schedules, incentivizing early support and promoting long-term holding.
+  behalf of prebuy participants. These acquired tokens are then distributed to participants with vesting schedules, incentivizing early support and promoting long term holding.
 
   ### 4. Single-Sided Liquidity Positions (SSL)
 
@@ -70,7 +70,7 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts, and hence f
 
 ### Audit
 
-NoiceLaunchpad has been audited by **Pashov Audit Group**.
+NoiceLaunchpad has been audited by [**Pashov Audit Group**](https://pashov.com).
 
 - **Audit Period**: October 10, 2025 - October 13, 2025
 - **Audited Commit**: [`4d7e8c2`](https://github.com/noiceengg/noice-launchpad/commit/4d7e8c22cd7bb7404c0747da85a8c21878e41b3a)
