@@ -1,63 +1,76 @@
-# Noice Launchpad Contracts 
+# Noice Launchpad Contracts
+
 [Noice](https://noice.so) is a permissioned launchpad built on top of [Doppler Multicurve](https://doppler.lol/multicurve.pdf) and Uniswap V4.
 
+---
+
+## Table of Contents
+
+1. [Acknowledgement](#acknowledgement)
+2. [Core Features](#core-features)
+   - [Multicurve](#1-multicurve)
+   - [Creator Vesting with Linear Lockup](#2-creator-vesting-with-linear-lockup)
+   - [Prebuy Mechanism with Vesting](#3-prebuy-mechanism-with-vesting)
+   - [Single-Sided Liquidity Positions (SSLPs)](#4-single-sided-liquidity-positions-sslps)
+3. [Launch Flow](#launch-flow)
+4. [Core Contracts](#core-contracts)
+5. [Contract Architecture](#contract-architecture)
+6. [Token Allocation and Distribution Details](#token-allocation-and-distribution-details)
+   - [Allocation at Launch](#allocation-at-launch)
+   - [Circulation Over Time](#circulation-over-time)
+   - [Token Destination Flow](#token-destination-flow)
+7. [Multicurve Liquidity Details](#multicurve-liquidity-details)
+8. [Prebuy + Vesting](#prebuy--vesting)
+9. [Creator Allocation + Vesting](#creator-allocation--vesting)
+10. [Single Side Liquidity Positions System](#single-side-liquidity-positions-system)
+11. [Fee Management](#fee-management)
+12. [Liquidity Efficiency Analysis](#liquidity-efficiency-analysis)
+13. [Access Control Matrix](#access-control-matrix)
+14. [Security & Audits](#security)
+
+---
 
 ## Acknowledgement
 
 This codebase is a fork of [Doppler](https://github.com/whetstoneresearch/doppler) at commit [`204d121`](https://github.com/whetstoneresearch/doppler/commit/204d1217c9a633cfe1f9b8da63feb649d0a9aa04).
-The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence forking from the multicurve contracts have been helpful with tests and scripting.
 
+The **Noice Launchpad** extends Doppler's Multicurve contracts — this fork provides compatibility with existing tests and scripting infrastructure.
+
+---
 
 ## Core Features
 
-  ### 1. Multicurve
+### 1. Multicurve
 
-  [Doppler's Multicurve](https://www.doppler.lol/multicurve.pdf) is a liquidity allocation strategy that stacks liquidity in tick ranges on top of each other to form a curve where liquidity in any given tick range is strictly increasing. This design significantly increases the cost of acquiring tokens within those ranges compared to a constant liquidity position. By concentrating liquidity more densely as price increases, Multicurve creates a more efficient price discovery mechanism and provides better protection against sudden price movements.
+[Doppler’s Multicurve](https://www.doppler.lol/multicurve.pdf) allocates liquidity in increasing tick ranges to form a stacked curve. Liquidity becomes denser as price rises, enabling efficient price discovery and better volatility resistance.
 
-  ### 2. Creator Vesting with Linear Lockup
+### 2. Creator Vesting with Linear Lockup
 
-  Noice Launchpad prioritizes creators by allocating them the highest portion of the token supply, secured through linear vesting schedules. This ensures creators remain aligned with the long-term success of their project while maintaining meaningful ownership. Creators also have the flexibility to delegate portions of their vested allocation to team members or collaborators, with the same vesting parameters applied to delegated amounts.
+Founders receive the largest share of tokens via linear vesting. This keeps them aligned long-term while retaining ownership. Vesting is implemented through Sablier and supports delegation to team members.
 
-  **Code:** [`_initiateCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L373-L425)
+**Code:** [`_initiateCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L373-L425)
 
-  ### 3. Prebuy Mechanism with Vesting
+### 3. Prebuy Mechanism with Vesting
 
-  The launchpad implements a prebuy mechanism that allows early participants to commit quote tokens (i.e. NOICE) before the token launch. Once the token is launched, the launchpad automatically executes purchases at the earliest price range on behalf of prebuy participants. These acquired tokens are then distributed to participants with vesting schedules, incentivizing early support and promoting long term holding.
+A portion of tokens is pre-purchased by ecosystem participants (using $NOICE). Tokens are distributed with vesting schedules to promote commitment.
 
-  **Code:** [`_executeNoicePrebuy()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L427-L505)
+**Code:** [`_executeNoicePrebuy()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L427-L505)
 
-  ### 4. Single-Sided Liquidity Positions (SSLPs)
+### 4. Single-Sided Liquidity Positions (SSLPs)
 
-  The launchpad supports single-sided liquidity positions that enable creators to raise additional capital as their token appreciates. Creators can place their launched tokens in out-of-range liquidity positions at higher price points. As the token price crosses these milestones and enters the liquidity ranges, the tokens are gradually sold for the quote token, providing creators with progressive funding tied directly to their token's price progression.
+Founders allocate part of their tokens to single-sided positions that unlock progressively as price milestones are crossed — providing programmable liquidity.
 
-  **Code:** [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L507-L573)
-  
-### Launch Flow
-```
-┌─────────────────────────────────────────┐
-│  1. Create token + Doppler multicurve   │
-│     Uniswap v4 pool (NOICE as quote)    │
-└──────────────────┬──────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│  2. Allocate tokens to create           │
-│     NOICE LP unlock positions           │
-│     (SSL: out-of-range positions that   │
-│      unlock NOICE when crossed)         │
-└──────────────────┬──────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│  3. Allocate tokens for creator         │
-│     allocations (with Sablier vesting)  │
-└──────────────────┬──────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────┐
-│  4. Execute prebuy: swap NOICE → Token  │
-│     and distribute with vesting         │
-└─────────────────────────────────────────┘
+**Code:** [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L507-L573)
+
+---
+
+## Launch Flow
+
+```text
+1. Create token + Doppler multicurve Uniswap v4 pool (NOICE as quote)
+2. Allocate SSL positions (out-of-range liquidity for milestone unlocks)
+3. Allocate creator vesting positions (Sablier)
+4. Execute prebuy (NOICE → Token) and distribute with vesting 
 ```
 
 **Main Entry Point:** [`bundleWithCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L204-L290)
