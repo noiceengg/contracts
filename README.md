@@ -172,7 +172,7 @@ graph TB
 - 4 tranches from $252K to $15M market cap
 - Converted from $TOKEN → NOICE as positions cross
 
-#### Token Destination Flow
+### Token Destination Flow
 
 ```mermaid
 flowchart LR
