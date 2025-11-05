@@ -24,7 +24,7 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
   The launchpad implements a prebuy mechanism that allows early participants to commit quote tokens (i.e. NOICE) before the token launch. Once the token is launched, the launchpad automatically executes purchases at the earliest price range on
   behalf of prebuy participants. These acquired tokens are then distributed to participants with vesting schedules, incentivizing early support and promoting long term holding.
 
-  ### 4. Single-Sided Liquidity Positions (SSL)
+  ### 4. Single-Sided Liquidity Positions (SSLPs)
 
   The launchpad supports single-sided liquidity positions that enable creators to raise additional capital as
   their token appreciates. Creators can place their launched tokens in out-of-range liquidity positions at
@@ -66,6 +66,65 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
 - **UniswapV4MulticurveInitializer**: Doppler's util that handles multicurve liquidity initialization
 - **UniversalRouter**: Executes token swaps for the prebuy mechanism
 - **Sablier**: Manages all vesting streams for creators and prebuy participants
+
+### Contract Architecture 
+
+```mermaid
+classDiagram
+    class NoiceLaunchpad {
+        +address owner
+        +IPoolManager poolManager
+        +Airlock airlock
+        +IUniversalRouter router
+        +ISablierLockup sablierLockup
+        +ISablierBatchLockup sablierBatchLockup
+        +mapping assetCreators
+        +mapping sablierStreams
+        +mapping noiceLpUnlockPositions
+        +mapping noiceLpUnlockPositionWithdrawn
+        +bundleWithCreatorVesting()
+        +withdrawNoiceLpUnlockPosition()
+        +cancelVestingStreams()
+        +sweep()
+        +execute()
+        +getNoiceLpUnlockPositions()
+        +getNoiceLpUnlockPositionCount()
+        -_initiateCreatorVesting()
+        -_executeNoicePrebuy()
+        -_createNoiceLpUnlockPositions()
+    }
+
+    class MiniV4Manager {
+        +IPoolManager poolManager
+        #_mint()
+        #_burn()
+    }
+
+    class OwnableRoles {
+        +onlyOwner()
+        +onlyRoles()
+        +onlyRolesOrOwner()
+        +grantRoles()
+        +revokeRoles()
+        +hasAllRoles()
+    }
+
+    class Airlock {
+        +create()
+        +getAssetData()
+    }
+
+    class UniswapV4MulticurveInitializer {
+        +getState()
+        +createMulticurve()
+    }
+
+    NoiceLaunchpad --|> MiniV4Manager
+    NoiceLaunchpad --|> OwnableRoles
+    NoiceLaunchpad --> Airlock
+    NoiceLaunchpad --> UniswapV4MulticurveInitializer
+```
+
 
 ## Security
 
