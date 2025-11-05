@@ -217,17 +217,6 @@ flowchart LR
 | Curve 2B | 1.5B | $1.5M-$2M | -29880 to -27000 | Overlapping growth |
 | Curve 3 | 17B | $2M-$1.5B | -27000 to 39240 | Late stage depth |
 
-### Effective Liquidity Distribution
-
-| FDV Range | Total Tokens | Curves Active | Notes |
-|-----------|--------------|---------------|--------|
-| $200K-$250K | 10B | Curve 0 | Prebuy only |
-| $250K-$500K | 4B | Curve 1A | Early public |
-| $500K-$1M | 10B | Curves 1A+1B | Overlapping liquidity |
-| $1M-$1.5M | 1.5B | Curve 2A | Growth phase |
-| $1.5M-$2M | 3B | Curves 2A+2B | Enhanced depth |
-| $2M-$1.5B | 17B | Curve 3 | Long-term liquidity |
-
 ### Curve Shares (out of 1e18)
 
 ```solidity
