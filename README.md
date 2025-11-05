@@ -163,7 +163,7 @@ graph TB
 - 40B public curve positions
 - 5B creator unlocked
 
-**Progressive Unlock (t=0 to t=24mo): 40B (40%)**
+**Progressive Unlock (t=0 to t=12mo): 40B (40%)**
 - 10B prebuy (linear vest over 12 months)
 - 30B creator (linear vest over 12 months)
 
