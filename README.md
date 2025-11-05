@@ -129,7 +129,7 @@ classDiagram
 ```
 
 ## Token Allocation and Distribution Details
-
+**Note:** These numbers might change and it serves as a reference for using the noice launchpad contract
 ### Allocation at Launch
 ```mermaid
 graph TB
