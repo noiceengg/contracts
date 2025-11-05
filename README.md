@@ -163,30 +163,6 @@ Total:    800000000000000000  (80% = 40B public curves)
 
 Note: The remaining 20% (10B) comes from prebuy participants filling Curve 0.
 
-### Position Architecture
-
-**Curve 0 (10B tokens)**
-- Price range: $200K-$250K
-- Purpose: Prebuy liquidity
-- Filled by prebuy participants at launch
-
-**Curves 1A & 1B (10B tokens combined)**
-- Curve 1A: 4B @ $250K-$1M
-- Curve 1B: 6B @ $500K-$1M (overlapping)
-- Purpose: Initial public liquidity with depth
-- Creates "valley effect" at $500K-$1M
-
-**Curves 2A & 2B (3B tokens combined)**
-- Curve 2A: 1.5B @ $1M-$2M
-- Curve 2B: 1.5B @ $1.5M-$2M (overlapping)
-- Purpose: Growth phase liquidity
-- Creates second "valley effect" at $1.5M-$2M
-
-**Curve 3 (17B tokens)**
-- Price range: $2M-$1.5B
-- Structure: Single constant position
-- Purpose: Long-term liquidity depth
-
 ### Liquidity Distribution Visualization
 
 ```mermaid
