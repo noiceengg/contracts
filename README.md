@@ -125,16 +125,43 @@ classDiagram
     NoiceLaunchpad --> UniswapV4MulticurveInitializer
 ```
 
-## Access Control Matrix
+## Multicurve Liquidity Details
 
-| Function | Owner | Executor | Creator | Notes |
-|----------|-------|----------|---------|-------|
-| `bundleWithCreatorVesting()` | ✓ | ✓ | ✗ | Atomic launch |
-| `withdrawNoiceLpUnlockPosition()` | ✓ | ✓ | ✗ | Claim SSL NOICE |
-| `cancelVestingStreams()` | ✓ | ✗ | ✗ | Emergency only |
-| `sweep()` | ✓ | ✗ | ✗ | Token recovery |
-| `execute()` | ✓ | ✗ | ✗ | Arbitrary calls |
-| `grantRoles()` | ✓ | ✗ | ✗ | Role management |
+### Curve Positions (40B Total)
+
+| Curve | Amount | FDV Range | Ticks | Purpose |
+|-------|---------|-----------|--------|---------|
+| Curve 0 | 10B | $200K-$250K | -49980 to -47760 | Prebuy liquidity |
+| Curve 1A | 4B | $250K-$1M | -47760 to -33900 | Initial public liquidity |
+| Curve 1B | 6B | $500K-$1M | -40860 to -33900 | Overlapping depth |
+| Curve 2A | 1.5B | $1M-$2M | -33900 to -27000 | Growth phase |
+| Curve 2B | 1.5B | $1.5M-$2M | -29880 to -27000 | Overlapping growth |
+| Curve 3 | 17B | $2M-$1.5B | -27000 to 39240 | Late stage depth |
+
+### Effective Liquidity Distribution
+
+| FDV Range | Total Tokens | Curves Active | Notes |
+|-----------|--------------|---------------|--------|
+| $200K-$250K | 10B | Curve 0 | Prebuy only |
+| $250K-$500K | 4B | Curve 1A | Early public |
+| $500K-$1M | 10B | Curves 1A+1B | Overlapping liquidity |
+| $1M-$1.5M | 1.5B | Curve 2A | Growth phase |
+| $1.5M-$2M | 3B | Curves 2A+2B | Enhanced depth |
+| $2M-$1.5B | 17B | Curve 3 | Long-term liquidity |
+
+### Curve Shares (out of 1e18)
+
+```solidity
+Curve 0:  200000000000000000  (20.0% of 50B = 10B)
+Curve 1A:  80000000000000000  (8.0% of 50B = 4B)
+Curve 1B: 120000000000000000  (12.0% of 50B = 6B)
+Curve 2A:  30000000000000000  (3.0% of 50B = 1.5B)
+Curve 2B:  30000000000000000  (3.0% of 50B = 1.5B)
+Curve 3:  340000000000000000  (34.0% of 50B = 17B)
+Total:    800000000000000000  (80% = 40B public curves)
+```
+
+Note: The remaining 20% (10B) comes from prebuy participants filling Curve 0.
 
 ## Liquidity Efficiency Analysis
 
@@ -153,6 +180,17 @@ If we used constant liquidity from $250K-$1.5B instead of multicurve:
 - Preserves more tokens for growth phases
 - Creates "valley effects" for accumulation zones
 - Improves capital efficiency by 2x in critical ranges
+
+## Access Control Matrix
+
+| Function | Owner | Executor | Creator | Notes |
+|----------|-------|----------|---------|-------|
+| `bundleWithCreatorVesting()` | ✓ | ✓ | ✗ | Atomic launch |
+| `withdrawNoiceLpUnlockPosition()` | ✓ | ✓ | ✗ | Claim SSL NOICE |
+| `cancelVestingStreams()` | ✓ | ✗ | ✗ | Emergency only |
+| `sweep()` | ✓ | ✗ | ✗ | Token recovery |
+| `execute()` | ✓ | ✗ | ✗ | Arbitrary calls |
+| `grantRoles()` | ✓ | ✗ | ✗ | Role management |
 
 ## Security
 
