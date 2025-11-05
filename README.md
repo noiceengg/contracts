@@ -268,14 +268,16 @@ The overlapping curves create "valley effects" at specific market cap milestones
 ### Participant Structure
 
 **Syndicate Multisig**
-- Amount: ~191M NOICE (50% of prebuy)
+- Amount: ~191M NOICE (50% of prebuy)* 
 - Vesting: 1 year linear
-- Receives: 5B ORACLE tokens vested
+- Receives: 5B $TOKEN tokens vested
 
 **Ecosystem Fund Multisig**
-- Amount: ~191M NOICE (50% of prebuy)
+- Amount: ~191M NOICE (50% of prebuy)*
 - Vesting: 1 year linear
-- Receives: 5B ORACLE tokens vested
+- Receives: 5B $TOKEN tokens vested
+
+*: Dependent on the $NOICE Pricing
 
 ### Execution Flow
 
@@ -297,14 +299,14 @@ sequenceDiagram
     NL->>SM: TransferFrom NOICE
     NL->>EFM: TransferFrom NOICE
     
-    NL->>UR: Swap NOICE → ORACLE
-    UR-->>NL: ORACLE tokens (10B)
+    NL->>UR: Swap NOICE → $TOKEN
+    UR-->>NL: $TOKEN tokens (10B)
     
     Note over NL: Calculate pro-rata distribution
     
     NL->>SAB: Create vesting streams
-    SAB-->>SM: Vested ORACLE (5B)
-    SAB-->>EFM: Vested ORACLE (5B)
+    SAB-->>SM: Vested $TOKEN (5B)
+    SAB-->>EFM: Vested $TOKEN (5B)
 ```
 
 ## Creator Allocation + Vesting
