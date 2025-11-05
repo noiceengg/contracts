@@ -246,19 +246,6 @@ graph LR
     C2 -->|price increases| C3
 ```
 
-### Valley Effect Analysis
-
-The overlapping curves create "valley effects" at specific market cap milestones:
-
-1. **$500K-$1M Valley:** 10B tokens (Curves 1A + 1B)
-   - Enhanced liquidity depth
-   - Reduced slippage for large trades
-   - Price stability zone
-
-2. **$1.5M-$2M Valley:** 3B tokens (Curves 2A + 2B)
-   - Secondary accumulation zone
-   - Controlled price discovery
-   - Reduced price manipulation
 
 ## Prebuy + Vesting
 
@@ -433,7 +420,6 @@ If we used constant liquidity from $250K-$1.5B instead of multicurve:
 **Key Benefits:**
 - Uses ~50% fewer tokens in early ranges
 - Preserves more tokens for growth phases
-- Creates "valley effects" for accumulation zones
 - Improves capital efficiency by 2x in critical ranges
 
 ## Access Control Matrix
