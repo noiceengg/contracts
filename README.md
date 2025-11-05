@@ -125,75 +125,6 @@ classDiagram
     NoiceLaunchpad --> UniswapV4MulticurveInitializer
 ```
 
-## Multicurve Liquidity Details
-
-### Curve Positions (40B Total)
-
-| Curve | Amount | FDV Range | Ticks | Purpose |
-|-------|---------|-----------|--------|---------|
-| Curve 0 | 10B | $200K-$250K | -49980 to -47760 | Prebuy liquidity |
-| Curve 1A | 4B | $250K-$1M | -47760 to -33900 | Initial public liquidity |
-| Curve 1B | 6B | $500K-$1M | -40860 to -33900 | Overlapping depth |
-| Curve 2A | 1.5B | $1M-$2M | -33900 to -27000 | Growth phase |
-| Curve 2B | 1.5B | $1.5M-$2M | -29880 to -27000 | Overlapping growth |
-| Curve 3 | 17B | $2M-$1.5B | -27000 to 39240 | Late stage depth |
-
-### Effective Liquidity Distribution
-
-| FDV Range | Total Tokens | Curves Active | Notes |
-|-----------|--------------|---------------|--------|
-| $200K-$250K | 10B | Curve 0 | Prebuy only |
-| $250K-$500K | 4B | Curve 1A | Early public |
-| $500K-$1M | 10B | Curves 1A+1B | Overlapping liquidity |
-| $1M-$1.5M | 1.5B | Curve 2A | Growth phase |
-| $1.5M-$2M | 3B | Curves 2A+2B | Enhanced depth |
-| $2M-$1.5B | 17B | Curve 3 | Long-term liquidity |
-
-### Curve Shares (out of 1e18)
-
-```solidity
-Curve 0:  200000000000000000  (20.0% of 50B = 10B)
-Curve 1A:  80000000000000000  (8.0% of 50B = 4B)
-Curve 1B: 120000000000000000  (12.0% of 50B = 6B)
-Curve 2A:  30000000000000000  (3.0% of 50B = 1.5B)
-Curve 2B:  30000000000000000  (3.0% of 50B = 1.5B)
-Curve 3:  340000000000000000  (34.0% of 50B = 17B)
-Total:    800000000000000000  (80% = 40B public curves)
-```
-
-Note: The remaining 20% (10B) comes from prebuy participants filling Curve 0.
-
-### Liquidity Distribution Visualization
-
-```mermaid
-graph LR
-    subgraph "Price Ranges"
-        C0[Curve 0<br/>$200K-$250K<br/>10B tokens]
-        C1[Curves 1A+1B<br/>$250K-$1M<br/>10B tokens]
-        C2[Curves 2A+2B<br/>$1M-$2M<br/>3B tokens]
-        C3[Curve 3<br/>$2M-$1.5B<br/>17B tokens]
-    end
-    
-    C0 -->|price increases| C1
-    C1 -->|price increases| C2
-    C2 -->|price increases| C3
-    
-```
-
-### Valley Effect Analysis
-
-The overlapping curves create "valley effects" at specific market cap milestones:
-
-1. **$500K-$1M Valley:** 10B tokens (Curves 1A + 1B)
-   - Enhanced liquidity depth
-   - Reduced slippage for large trades
-   - Price stability zone
-
-2. **$1.5M-$2M Valley:** 3B tokens (Curves 2A + 2B)
-   - Secondary accumulation zone
-   - Controlled price discovery
-   - Reduced price manipulation
-
 ## Token Allocation and Distribution Details
 
 ### Allocation at Launch
@@ -273,6 +204,74 @@ flowchart LR
     SSLPos -.->|when crossed| Escrow
     Escrow -.->|claimable| Creator
 ```
+## Multicurve Liquidity Details
+
+### Curve Positions (40B Total)
+
+| Curve | Amount | FDV Range | Ticks | Purpose |
+|-------|---------|-----------|--------|---------|
+| Curve 0 | 10B | $200K-$250K | -49980 to -47760 | Prebuy liquidity |
+| Curve 1A | 4B | $250K-$1M | -47760 to -33900 | Initial public liquidity |
+| Curve 1B | 6B | $500K-$1M | -40860 to -33900 | Overlapping depth |
+| Curve 2A | 1.5B | $1M-$2M | -33900 to -27000 | Growth phase |
+| Curve 2B | 1.5B | $1.5M-$2M | -29880 to -27000 | Overlapping growth |
+| Curve 3 | 17B | $2M-$1.5B | -27000 to 39240 | Late stage depth |
+
+### Effective Liquidity Distribution
+
+| FDV Range | Total Tokens | Curves Active | Notes |
+|-----------|--------------|---------------|--------|
+| $200K-$250K | 10B | Curve 0 | Prebuy only |
+| $250K-$500K | 4B | Curve 1A | Early public |
+| $500K-$1M | 10B | Curves 1A+1B | Overlapping liquidity |
+| $1M-$1.5M | 1.5B | Curve 2A | Growth phase |
+| $1.5M-$2M | 3B | Curves 2A+2B | Enhanced depth |
+| $2M-$1.5B | 17B | Curve 3 | Long-term liquidity |
+
+### Curve Shares (out of 1e18)
+
+```solidity
+Curve 0:  200000000000000000  (20.0% of 50B = 10B)
+Curve 1A:  80000000000000000  (8.0% of 50B = 4B)
+Curve 1B: 120000000000000000  (12.0% of 50B = 6B)
+Curve 2A:  30000000000000000  (3.0% of 50B = 1.5B)
+Curve 2B:  30000000000000000  (3.0% of 50B = 1.5B)
+Curve 3:  340000000000000000  (34.0% of 50B = 17B)
+Total:    800000000000000000  (80% = 40B public curves)
+```
+
+Note: The remaining 20% (10B) comes from prebuy participants filling Curve 0.
+
+### Liquidity Distribution Visualization
+
+```mermaid
+graph LR
+    subgraph "Price Ranges"
+        C0[Curve 0<br/>$200K-$250K<br/>10B tokens]
+        C1[Curves 1A+1B<br/>$250K-$1M<br/>10B tokens]
+        C2[Curves 2A+2B<br/>$1M-$2M<br/>3B tokens]
+        C3[Curve 3<br/>$2M-$1.5B<br/>17B tokens]
+    end
+    
+    C0 -->|price increases| C1
+    C1 -->|price increases| C2
+    C2 -->|price increases| C3
+    
+```
+
+### Valley Effect Analysis
+
+The overlapping curves create "valley effects" at specific market cap milestones:
+
+1. **$500K-$1M Valley:** 10B tokens (Curves 1A + 1B)
+   - Enhanced liquidity depth
+   - Reduced slippage for large trades
+   - Price stability zone
+
+2. **$1.5M-$2M Valley:** 3B tokens (Curves 2A + 2B)
+   - Secondary accumulation zone
+   - Controlled price discovery
+   - Reduced price manipulation
 
 ## Liquidity Efficiency Analysis
 
