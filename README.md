@@ -377,6 +377,47 @@ withdrawNoiceLpUnlockPosition(
 - [`getNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L575-L586) - Get all SSL positions for a token
 - [`getNoiceLpUnlockPositionCount()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L588-L590) - Get count of SSL positions
 
+## Fee Management
+
+### Fee Distribution
+
+**Trading Fees: 2% Total**
+- 0.1% to Doppler (Protocol - 5% of fees)
+- 1.9% to Creator (95% of fees)
+
+**Token Fee Split:**
+- 95% to Creator
+- 5% to Doppler
+
+**Creator Share:**
+- 1.9% of total trading volume
+- Fees is earned in token/noice
+
+#### Fee Harvesting Flow
+
+```mermaid
+sequenceDiagram
+    participant Mon as Monitoring Job
+    participant PM as Pool Manager
+    participant Harv as Harvester
+    participant Creator as Creator Wallet
+
+    Note over Mon: Check positions periodically
+    
+    Mon->>PM: Query unclaimed fees
+    PM-->>Mon: Fee amounts ($TOKEN+NOICE tokens)
+    
+    alt Fees above threshold
+        Mon->>Harv: Trigger harvest
+        Harv->>PM: Collect fees from positions
+        PM-->>Harv: $TOKEN tokens
+        
+  
+        
+        Harv->>Creator: Transfer 95% fees
+    end
+```
+
 ## Liquidity Efficiency Analysis
 
 ### Constant vs Multicurve Comparison
