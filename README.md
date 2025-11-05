@@ -1,5 +1,5 @@
 # Noice Launchpad Contracts 
-Noice Launchpad is a permissioned launchpad built on top of [Doppler Multicurve](https://doppler.lol/multicurve.pdf) and Uniswap V4 for sniper protection during early growth phase.
+Noice Launchpad is a permissioned launchpad built on top of [Doppler Multicurve](https://doppler.lol/multicurve.pdf) and Uniswap V4.
 
 
 ## Acknowledgement
