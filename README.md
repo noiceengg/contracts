@@ -58,8 +58,9 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
 └─────────────────────────────────────────┘
 ```
 
-### Key Components
+### Core Contracts
 
+- **NoiceLaunchpad**: Main orchestrator that coordinates all launch activities atomically in a single transaction 
 - **Airlock**: Doppler's Airlock contract for token creation and pool initialization
 - **MiniV4Manager**: Base contract providing Uniswap v4 position management
 - **UniswapV4MulticurveInitializer**: Doppler's util that handles multicurve liquidity initialization
