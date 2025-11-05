@@ -194,6 +194,86 @@ The overlapping curves create "valley effects" at specific market cap milestones
    - Controlled price discovery
    - Reduced price manipulation
 
+## Token Allocation and Distribution Details
+
+### Allocation at Launch
+
+```mermaid
+graph TB
+    Start[100B Total Supply] --> Split{Allocation Split}
+    
+    Split -->|40%| MC[40B Public Curves]
+    Split -->|15%| SSL[15B SSL]
+    Split -->|10%| Prebuy[10B Prebuy]
+    Split -->|35%| Team[35B Team/Creator]
+    
+    MC --> MC0[10B Curve 0<br/>$200K-$250K]
+    MC --> MC1A[4B Curve 1A<br/>$250K-$1M]
+    MC --> MC1B[6B Curve 1B<br/>$500K-$1M]
+    MC --> MC2A[1.5B Curve 2A<br/>$1M-$2M]
+    MC --> MC2B[1.5B Curve 2B<br/>$1.5M-$2M]
+    MC --> MC3[17B Curve 3<br/>$2M-$1.5B]
+    
+    SSL --> SSL1[3.85B SSL1<br/>$252K-$2.5M]
+    SSL --> SSL2[4.46B SSL2<br/>$2.5M-$5M]
+    SSL --> SSL3[4.24B SSL3<br/>$5M-$10M]
+    SSL --> SSL4[2.45B SSL4<br/>$10M-$15M]
+    
+    Prebuy --> PB[10B<br/>1 year vest]
+    
+    Team --> Team1[30B Vested<br/>12 months]
+    Team --> Team2[5B Unlocked<br/>Immediate]
+    
+```
+
+### Circulation Over Time
+
+**Immediate Circulation (t=0): 45B (45%)**
+- 40B public curve positions
+- 5B creator unlocked
+
+**Progressive Unlock (t=0 to t=24mo): 40B (40%)**
+- 10B prebuy (linear vest over 12 months)
+- 30B creator (linear vest over 12 months)
+
+**Price-Dependent Unlock: 15B (15%)**
+- SSL positions unlock as price rises
+- 4 tranches from $252K to $15M market cap
+- Converted from $TOKEN → NOICE as positions cross
+
+#### Token Destination Flow
+
+```mermaid
+flowchart LR
+    subgraph "Launch"
+        LP[Launchpad Contract]
+    end
+    
+    subgraph "Immediate Recipients"
+        Pool[Uniswap V4 Pool<br/>40B multicurve]
+        SSLPos[SSL Positions<br/>15B out-of-range]
+    end
+    
+    subgraph "Vested Recipients"
+        Creator[Creator Wallet<br/>30B + 5B streams]
+        Syndicate[Syndicate Multisig<br/>5B stream]
+        Ecosystem[Ecosystem Fund<br/>5B stream]
+    end
+    
+    subgraph "Future Claims"
+        Escrow[SSLP Escrow<br/>SSL unlocks]
+    end
+    
+    LP -->|40B| Pool
+    LP -->|15B| SSLPos
+    LP -->|35B| Creator
+    LP -->|5B| Syndicate
+    LP -->|5B| Ecosystem
+    
+    SSLPos -.->|when crossed| Escrow
+    Escrow -.->|claimable| Creator
+```
+
 ## Liquidity Efficiency Analysis
 
 ### Constant vs Multicurve Comparison
