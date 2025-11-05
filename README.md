@@ -18,19 +18,21 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
 
   Noice Launchpad prioritizes creators by allocating them the highest portion of the token supply, secured through linear vesting schedules. This ensures creators remain aligned with the long-term success of their project while maintaining meaningful ownership. Creators also have the flexibility to delegate portions of their vested allocation to team members or collaborators, with the same vesting parameters applied to delegated amounts.
 
+  **Code:** [`_initiateCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L373-L425)
+
   ### 3. Prebuy Mechanism with Vesting
 
-  The launchpad implements a prebuy mechanism that allows early participants to commit quote tokens (i.e. NOICE) before the token launch. Once the token is launched, the launchpad automatically executes purchases at the earliest price range on
-  behalf of prebuy participants. These acquired tokens are then distributed to participants with vesting schedules, incentivizing early support and promoting long term holding.
+  The launchpad implements a prebuy mechanism that allows early participants to commit quote tokens (i.e. NOICE) before the token launch. Once the token is launched, the launchpad automatically executes purchases at the earliest price range on behalf of prebuy participants. These acquired tokens are then distributed to participants with vesting schedules, incentivizing early support and promoting long term holding.
+
+  **Code:** [`_executeNoicePrebuy()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L427-L505)
 
   ### 4. Single-Sided Liquidity Positions (SSLPs)
 
-  The launchpad supports single-sided liquidity positions that enable creators to raise additional capital as
-  their token appreciates. Creators can place their launched tokens in out-of-range liquidity positions at
-  higher price points. As the token price crosses these milestones and enters the liquidity ranges, the tokens are gradually sold for the quote token, providing creators with progressive funding tied directly to their token's price progression.
+  The launchpad supports single-sided liquidity positions that enable creators to raise additional capital as their token appreciates. Creators can place their launched tokens in out-of-range liquidity positions at higher price points. As the token price crosses these milestones and enters the liquidity ranges, the tokens are gradually sold for the quote token, providing creators with progressive funding tied directly to their token's price progression.
+
+  **Code:** [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L507-L573)
   
 ### Launch Flow
-
 ```
 ┌─────────────────────────────────────────┐
 │  1. Create token + Doppler multicurve   │
@@ -58,9 +60,11 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
 └─────────────────────────────────────────┘
 ```
 
+**Main Entry Point:** [`bundleWithCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L204-L290)
+
 ## Core Contracts
 
-- **NoiceLaunchpad**: Main orchestrator that coordinates all launch activities atomically in a single transaction 
+- **NoiceLaunchpad**: Main orchestrator that coordinates all launch activities atomically in a single transaction ([source](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol))
 - **Airlock**: Doppler's Airlock contract for token creation and pool initialization
 - **MiniV4Manager**: Base contract providing Uniswap v4 position management
 - **UniswapV4MulticurveInitializer**: Doppler's util that handles multicurve liquidity initialization
@@ -68,7 +72,6 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
 - **Sablier**: Manages all vesting streams for creators and prebuy participants
 
 ### Contract Architecture 
-
 ```mermaid
 classDiagram
     class NoiceLaunchpad {
@@ -128,7 +131,6 @@ classDiagram
 ## Token Allocation and Distribution Details
 
 ### Allocation at Launch
-
 ```mermaid
 graph TB
     Start[100B Total Supply] --> Split{Allocation Split}
@@ -154,7 +156,6 @@ graph TB
     
     Team --> Team1[30B Vested<br/>12 months]
     Team --> Team2[5B Unlocked<br/>Immediate]
-    
 ```
 
 ### Circulation Over Time
@@ -173,7 +174,6 @@ graph TB
 - Converted from $TOKEN → NOICE as positions cross
 
 ### Token Destination Flow
-
 ```mermaid
 flowchart LR
     subgraph "Launch"
@@ -209,17 +209,16 @@ flowchart LR
 
 ### Curve Positions (40B Total)
 
-| Curve | Amount | FDV Range | Ticks | Purpose |
-|-------|---------|-----------|--------|---------|
-| Curve 0 | 10B | $200K-$250K | -49980 to -47760 | Prebuy liquidity |
-| Curve 1A | 4B | $250K-$1M | -47760 to -33900 | Initial public liquidity |
-| Curve 1B | 6B | $500K-$1M | -40860 to -33900 | Overlapping depth |
-| Curve 2A | 1.5B | $1M-$2M | -33900 to -27000 | Growth phase |
-| Curve 2B | 1.5B | $1.5M-$2M | -29880 to -27000 | Overlapping growth |
-| Curve 3 | 17B | $2M-$1.5B | -27000 to 39240 | Late stage depth |
+| Curve | Amount | FDV Range | Purpose |
+|-------|---------|-----------|---------|
+| Curve 0 | 10B | $200K-$250K | Prebuy liquidity |
+| Curve 1A | 4B | $250K-$1M | Initial public liquidity |
+| Curve 1B | 6B | $500K-$1M | Overlapping depth |
+| Curve 2A | 1.5B | $1M-$2M | Growth phase |
+| Curve 2B | 1.5B | $1.5M-$2M | Overlapping growth |
+| Curve 3 | 17B | $2M-$1.5B | Late stage depth |
 
 ### Curve Shares (out of 1e18)
-
 ```solidity
 Curve 0:  200000000000000000  (20.0% of 50B = 10B)
 Curve 1A:  80000000000000000  (8.0% of 50B = 4B)
@@ -233,7 +232,6 @@ Total:    800000000000000000  (80% = 40B public curves)
 Note: The remaining 20% (10B) comes from prebuy participants filling Curve 0.
 
 ### Liquidity Distribution Visualization
-
 ```mermaid
 graph LR
     subgraph "Price Ranges"
@@ -246,7 +244,6 @@ graph LR
     C0 -->|price increases| C1
     C1 -->|price increases| C2
     C2 -->|price increases| C3
-    
 ```
 
 ### Valley Effect Analysis
@@ -279,8 +276,9 @@ The overlapping curves create "valley effects" at specific market cap milestones
 
 *: Dependent on the $NOICE Pricing
 
-### Execution Flow
+**Code:** [`NoicePrebuyParams` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L44-L52) | [`_executeNoicePrebuy()` implementation](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L427-L505)
 
+### Execution Flow
 ```mermaid
 sequenceDiagram
     participant SM as Syndicate Multisig
@@ -319,8 +317,9 @@ sequenceDiagram
 - All streams created via Sablier batch
 - Recipient: Creator Privy Wallet
 
-### Vesting Structure
+**Code:** [`CreatorAllocation` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L28-L33) | [`_initiateCreatorVesting()` implementation](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L373-L425)
 
+### Vesting Structure
 ```solidity
 struct CreatorAllocation {
     address recipient;        // Creator Privy Wallet
@@ -333,7 +332,6 @@ struct CreatorAllocation {
 ## Single Side Liquidity Positions System
 
 ### SSL Position Lifecycle
-
 ```mermaid
 stateDiagram-v2
     [*] --> OutOfRange: Position created
@@ -356,6 +354,8 @@ stateDiagram-v2
     Claimed --> [*]
 ```
 
+**Code:** [`NoiceLpUnlockPosition` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L35-L42) | [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L507-L573)
+
 ### Withdrawal Process
 
 **Monitoring (Automated)**
@@ -370,6 +370,12 @@ withdrawNoiceLpUnlockPosition(
     trancheId
 )
 ```
+
+**Code:** [`withdrawNoiceLpUnlockPosition()` function](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L292-L346)
+
+**Position Query Functions:**
+- [`getNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L575-L586) - Get all SSL positions for a token
+- [`getNoiceLpUnlockPositionCount()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L588-L590) - Get count of SSL positions
 
 ## Liquidity Efficiency Analysis
 
@@ -393,12 +399,16 @@ If we used constant liquidity from $250K-$1.5B instead of multicurve:
 
 | Function | Owner | Executor | Creator | Notes |
 |----------|-------|----------|---------|-------|
-| `bundleWithCreatorVesting()` | ✓ | ✓ | ✗ | Atomic launch |
-| `withdrawNoiceLpUnlockPosition()` | ✓ | ✓ | ✗ | Claim SSL NOICE |
-| `cancelVestingStreams()` | ✓ | ✗ | ✗ | Emergency only |
-| `sweep()` | ✓ | ✗ | ✗ | Token recovery |
-| `execute()` | ✓ | ✗ | ✗ | Arbitrary calls |
+| [`bundleWithCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L204-L290) | ✓ | ✓ | ✗ | Atomic launch |
+| [`withdrawNoiceLpUnlockPosition()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L292-L346) | ✓ | ✓ | ✗ | Claim SSL NOICE |
+| [`cancelVestingStreams()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L348-L371) | ✓ | ✗ | ✗ | Emergency only |
+| [`sweep()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L592-L594) | ✓ | ✗ | ✗ | Token recovery |
+| [`execute()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L596-L602) | ✓ | ✗ | ✗ | Arbitrary calls |
 | `grantRoles()` | ✓ | ✗ | ✗ | Role management |
+
+**Constants:**
+- [`EXECUTOR_ROLE`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L70) - Role for executing SSL withdrawals
+- [`NOICE` address](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L75) - Quote token for all pools
 
 ## Security
 
