@@ -1,5 +1,5 @@
 # Noice Launchpad Contracts 
-Noice Launchpad is a permissioned launchpad built on top of [Doppler Multicurve](https://doppler.lol/multicurve.pdf) and Uniswap V4.
+[Noice](https://noice.so) is a permissioned launchpad built on top of [Doppler Multicurve](https://doppler.lol/multicurve.pdf) and Uniswap V4.
 
 
 ## Acknowledgement
@@ -12,8 +12,7 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
 
   ### 1. Multicurve
 
-  [Doppler's
-  Multicurve](https://www.doppler.lol/multicurve.pdf) is a liquidity allocation strategy that stacks liquidity in tick ranges on top of each other to form a curve where liquidity in any given tick range is strictly increasing. This design significantly increases the cost of acquiring tokens within those ranges compared to a constant liquidity position. By concentrating liquidity more densely as price increases, Multicurve creates a more efficient price discovery mechanism and provides better protection against sudden price movements.
+  [Doppler's Multicurve](https://www.doppler.lol/multicurve.pdf) is a liquidity allocation strategy that stacks liquidity in tick ranges on top of each other to form a curve where liquidity in any given tick range is strictly increasing. This design significantly increases the cost of acquiring tokens within those ranges compared to a constant liquidity position. By concentrating liquidity more densely as price increases, Multicurve creates a more efficient price discovery mechanism and provides better protection against sudden price movements.
 
   ### 2. Creator Vesting with Linear Lockup
 
@@ -29,6 +28,7 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
   The launchpad supports single-sided liquidity positions that enable creators to raise additional capital as
   their token appreciates. Creators can place their launched tokens in out-of-range liquidity positions at
   higher price points. As the token price crosses these milestones and enters the liquidity ranges, the tokens are gradually sold for the quote token, providing creators with progressive funding tied directly to their token's price progression.
+  
 ### Launch Flow
 
 ```
@@ -58,7 +58,7 @@ The NoiceLaunchpad currently extends Doppler's Multicurve contracts and hence fo
 └─────────────────────────────────────────┘
 ```
 
-### Core Contracts
+## Core Contracts
 
 - **NoiceLaunchpad**: Main orchestrator that coordinates all launch activities atomically in a single transaction 
 - **Airlock**: Doppler's Airlock contract for token creation and pool initialization
@@ -125,6 +125,34 @@ classDiagram
     NoiceLaunchpad --> UniswapV4MulticurveInitializer
 ```
 
+## Access Control Matrix
+
+| Function | Owner | Executor | Creator | Notes |
+|----------|-------|----------|---------|-------|
+| `bundleWithCreatorVesting()` | ✓ | ✓ | ✗ | Atomic launch |
+| `withdrawNoiceLpUnlockPosition()` | ✓ | ✓ | ✗ | Claim SSL NOICE |
+| `cancelVestingStreams()` | ✓ | ✗ | ✗ | Emergency only |
+| `sweep()` | ✓ | ✗ | ✗ | Token recovery |
+| `execute()` | ✓ | ✗ | ✗ | Arbitrary calls |
+| `grantRoles()` | ✓ | ✗ | ✗ | Role management |
+
+## Liquidity Efficiency Analysis
+
+### Constant vs Multicurve Comparison
+
+If we used constant liquidity from $250K-$1.5B instead of multicurve:
+
+| Range | Constant Supply | Multicurve Supply | Efficiency |
+|-------|-----------------|-------------------|------------|
+| $250K-$1M | 20.3B | 10B | 49% |
+| $1M-$2M | 5.9B | 3B | 51% |
+| $2M-$1.5B | 13.8B | 17B | 123% |
+
+**Key Benefits:**
+- Uses ~50% fewer tokens in early ranges
+- Preserves more tokens for growth phases
+- Creates "valley effects" for accumulation zones
+- Improves capital efficiency by 2x in critical ranges
 
 ## Security
 
