@@ -204,6 +204,7 @@ flowchart LR
     SSLPos -.->|when crossed| Escrow
     Escrow -.->|claimable| Creator
 ```
+
 ## Multicurve Liquidity Details
 
 ### Curve Positions (40B Total)
@@ -261,6 +262,112 @@ The overlapping curves create "valley effects" at specific market cap milestones
    - Secondary accumulation zone
    - Controlled price discovery
    - Reduced price manipulation
+
+### Prebuy + Vesting
+
+#### Participant Structure
+
+**Syndicate Multisig**
+- Amount: ~191M NOICE (50% of prebuy)
+- Vesting: 1 year linear
+- Receives: 5B ORACLE tokens vested
+
+**Ecosystem Fund Multisig**
+- Amount: ~191M NOICE (50% of prebuy)
+- Vesting: 1 year linear
+- Receives: 5B ORACLE tokens vested
+
+#### Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant SM as Syndicate Multisig
+    participant EFM as Ecosystem Fund Multisig
+    participant NL as Noice Launchpad
+    participant UR as Universal Router
+    participant SAB as Sablier
+
+    Note over SM,EFM: Pre-launch approvals
+    
+    SM->>NL: Approve NOICE
+    EFM->>NL: Approve NOICE
+    
+    Note over NL: During launch execution
+    
+    NL->>SM: TransferFrom NOICE
+    NL->>EFM: TransferFrom NOICE
+    
+    NL->>UR: Swap NOICE → ORACLE
+    UR-->>NL: ORACLE tokens (10B)
+    
+    Note over NL: Calculate pro-rata distribution
+    
+    NL->>SAB: Create vesting streams
+    SAB-->>SM: Vested ORACLE (5B)
+    SAB-->>EFM: Vested ORACLE (5B)
+```
+
+## Creator Allocation + Vesting
+
+### Allocation Breakdown
+
+**Creator Vesting (35B tokens)**
+- 30B vested over 12 months
+- 5B unlocked immediately
+- All streams created via Sablier batch
+- Recipient: Creator Privy Wallet
+
+### Vesting Structure
+
+```solidity
+struct CreatorAllocation {
+    address recipient;        // Creator Privy Wallet
+    uint256 amount;          // 30B or 5B
+    uint40 lockStartTimestamp;
+    uint40 lockEndTimestamp; // +12 months or immediate
+}
+```
+
+## Single Side Liquidity Positions System
+
+### SSL Position Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> OutOfRange: Position created
+    
+    OutOfRange --> InRange: Price crosses lower tick
+    
+    state InRange {
+        [*] --> Accumulating
+        Accumulating --> ConvertingOracle: Continuous
+        ConvertingOracle --> AccruingFees: Continuous
+        AccruingFees --> [*]
+    }
+    
+    InRange --> FullyCrossed: Price crosses upper tick
+    
+    FullyCrossed --> PendingWithdrawal: All ORACLE → NOICE
+    PendingWithdrawal --> Withdrawn: Executor calls withdraw
+    Withdrawn --> InEscrow: NOICE transferred
+    InEscrow --> Claimed: Creator claims
+    Claimed --> [*]
+```
+
+### Withdrawal Process
+
+**Monitoring (Automated)**
+- Track current pool tick
+- Identify fully crossed positions
+- Alert when withdrawal available
+
+**Execution (Executor Role)**
+```solidity
+withdrawNoiceLpUnlockPosition(
+    oracleAddress,
+    trancheId
+)
+```
 
 ## Liquidity Efficiency Analysis
 
