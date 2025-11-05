@@ -263,9 +263,9 @@ The overlapping curves create "valley effects" at specific market cap milestones
    - Controlled price discovery
    - Reduced price manipulation
 
-### Prebuy + Vesting
+## Prebuy + Vesting
 
-#### Participant Structure
+### Participant Structure
 
 **Syndicate Multisig**
 - Amount: ~191M NOICE (50% of prebuy)
@@ -277,7 +277,7 @@ The overlapping curves create "valley effects" at specific market cap milestones
 - Vesting: 1 year linear
 - Receives: 5B ORACLE tokens vested
 
-#### Execution Flow
+### Execution Flow
 
 ```mermaid
 sequenceDiagram
