@@ -340,14 +340,14 @@ stateDiagram-v2
     
     state InRange {
         [*] --> Accumulating
-        Accumulating --> ConvertingOracle: Continuous
-        ConvertingOracle --> AccruingFees: Continuous
+        Accumulating --> ConvertingToken: Continuous
+        ConvertingToken --> AccruingFees: Continuous
         AccruingFees --> [*]
     }
     
     InRange --> FullyCrossed: Price crosses upper tick
     
-    FullyCrossed --> PendingWithdrawal: All ORACLE → NOICE
+    FullyCrossed --> PendingWithdrawal: All TOKEN → NOICE
     PendingWithdrawal --> Withdrawn: Executor calls withdraw
     Withdrawn --> InEscrow: NOICE transferred
     InEscrow --> Claimed: Creator claims
