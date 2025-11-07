@@ -42,25 +42,25 @@ The **Noice Launchpad** extends Doppler's Multicurve contracts — this fork pro
 
 ### 1. Multicurve
 
-[Doppler’s Multicurve](https://www.doppler.lol/multicurve.pdf) allocates liquidity in increasing tick ranges to form a stacked curve. Liquidity becomes denser as price rises, enabling efficient price discovery and better volatility resistance.
+[Doppler's Multicurve](https://www.doppler.lol/multicurve.pdf) allocates liquidity in increasing tick ranges to form a stacked curve. Liquidity becomes denser as price rises, enabling efficient price discovery and better volatility resistance.
 
 ### 2. Creator Vesting with Linear Lockup
 
 Founders receive the largest share of tokens via linear vesting. This keeps them aligned long-term while retaining ownership. Vesting is implemented through Sablier and supports delegation to team members.
 
-**Code:** [`_initiateCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L373-L425)
+**Code:** [`_initiateCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L250-L302)
 
 ### 3. Prebuy Mechanism with Vesting
 
 A portion of tokens is pre-purchased by ecosystem participants (using $NOICE). Tokens are distributed with vesting schedules to promote commitment.
 
-**Code:** [`_executeNoicePrebuy()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L427-L505)
+**Code:** [`_executeNoicePrebuy()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L304-L385)
 
 ### 4. Single-Sided Liquidity Positions (SSLPs)
 
 Founders allocate part of their tokens to single-sided positions that unlock progressively as price milestones are crossed — providing programmable liquidity.
 
-**Code:** [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L507-L573)
+**Code:** [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L387-L468)
 
 ---
 
@@ -73,7 +73,7 @@ Founders allocate part of their tokens to single-sided positions that unlock pro
 4. Execute prebuy (NOICE → Token) and distribute with vesting 
 ```
 
-**Main Entry Point:** [`bundleWithCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L204-L290)
+**Main Entry Point:** [`bundleWithCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L195-L248)
 
 ## Core Contracts
 
@@ -88,15 +88,13 @@ Founders allocate part of their tokens to single-sided positions that unlock pro
 ```mermaid
 classDiagram
     class NoiceLaunchpad {
-        +address owner
+        +Airlock AIRLOCK
+        +UniversalRouter ROUTER
+        +ISablierLockup SABLIER_LOCKUP
+        +ISablierBatchLockup SABLIER_BATCH_LOCKUP
         +IPoolManager poolManager
-        +Airlock airlock
-        +IUniversalRouter router
-        +ISablierLockup sablierLockup
-        +ISablierBatchLockup sablierBatchLockup
-        +mapping assetCreators
-        +mapping sablierStreams
         +mapping noiceLpUnlockPositions
+        +mapping noiceLpUnlockPositionRecipient
         +mapping noiceLpUnlockPositionWithdrawn
         +bundleWithCreatorVesting()
         +withdrawNoiceLpUnlockPosition()
@@ -276,7 +274,7 @@ graph LR
 
 *: Dependent on the $NOICE Pricing
 
-**Code:** [`NoicePrebuyParams` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L44-L52) | [`_executeNoicePrebuy()` implementation](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L427-L505)
+**Code:** [`NoicePrebuyParticipant` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L54-L62) | [`_executeNoicePrebuy()` implementation](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L304-L385)
 
 ### Execution Flow
 ```mermaid
@@ -317,11 +315,11 @@ sequenceDiagram
 - All streams created via Sablier batch
 - Recipient: Creator Privy Wallet
 
-**Code:** [`CreatorAllocation` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L28-L33) | [`_initiateCreatorVesting()` implementation](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L373-L425)
+**Code:** [`NoiceCreatorAllocation` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L46-L52) | [`_initiateCreatorVesting()` implementation](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L250-L302)
 
 ### Vesting Structure
 ```solidity
-struct CreatorAllocation {
+struct NoiceCreatorAllocation {
     address recipient;        // Creator Privy Wallet
     uint256 amount;          // 30B or 5B
     uint40 lockStartTimestamp;
@@ -354,7 +352,7 @@ stateDiagram-v2
     Claimed --> [*]
 ```
 
-**Code:** [`NoiceLpUnlockPosition` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L35-L42) | [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L507-L573)
+**Code:** [`NoiceLpUnlockTranche` struct](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L64-L71) | [`_createNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L387-L468)
 
 ### Withdrawal Process
 
@@ -366,16 +364,17 @@ stateDiagram-v2
 **Execution (Executor Role)**
 ```solidity
 withdrawNoiceLpUnlockPosition(
-    oracleAddress,
-    trancheId
+    asset,
+    positionIndex,
+    recipient
 )
 ```
 
-**Code:** [`withdrawNoiceLpUnlockPosition()` function](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L292-L346)
+**Code:** [`withdrawNoiceLpUnlockPosition()` function](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L502-L530)
 
 **Position Query Functions:**
-- [`getNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L575-L586) - Get all SSL positions for a token
-- [`getNoiceLpUnlockPositionCount()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L588-L590) - Get count of SSL positions
+- [`getNoiceLpUnlockPositions()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L470-L486) - Get all SSL positions for a token
+- [`getNoiceLpUnlockPositionCount()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L488-L500) - Get count of SSL positions
 
 ## Fee Management
 
@@ -439,16 +438,15 @@ If we used constant liquidity from $250K-$1.5B instead of multicurve:
 
 | Function | Owner | Executor | Creator | Notes |
 |----------|-------|----------|---------|-------|
-| [`bundleWithCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L204-L290) | ✓ | ✓ | ✗ | Atomic launch |
-| [`withdrawNoiceLpUnlockPosition()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L292-L346) | ✓ | ✓ | ✗ | Claim SSL NOICE |
-| [`cancelVestingStreams()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L348-L371) | ✓ | ✗ | ✗ | Emergency only |
-| [`sweep()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L592-L594) | ✓ | ✗ | ✗ | Token recovery |
-| [`execute()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L596-L602) | ✓ | ✗ | ✗ | Arbitrary calls |
+| [`bundleWithCreatorVesting()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L195-L248) | ✓ | ✓ | ✗ | Atomic launch |
+| [`withdrawNoiceLpUnlockPosition()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L502-L530) | ✓ | ✓ | ✗ | Claim SSL NOICE |
+| [`cancelVestingStreams()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L532-L539) | ✓ | ✗ | ✗ | Emergency only |
+| [`sweep()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L541-L548) | ✓ | ✗ | ✗ | Token recovery |
+| [`execute()`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L550-L557) | ✓ | ✗ | ✗ | Arbitrary calls |
 | `grantRoles()` | ✓ | ✗ | ✗ | Role management |
 
 **Constants:**
-- [`EXECUTOR_ROLE`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L70) - Role for executing SSL withdrawals
-- [`NOICE` address](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L75) - Quote token for all pools
+- [`EXECUTOR_ROLE`](https://github.com/noiceengg/contracts/blob/main/src/NoiceLaunchpad.sol#L181) - Role for executing SSL withdrawals
 
 ## Security
 
