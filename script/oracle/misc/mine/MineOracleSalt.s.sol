@@ -9,7 +9,7 @@ import {DERC20} from "src/DERC20.sol";
  * @title MineOracleSalt
  * @notice Mine for a CREATE2 salt that produces an Oracle token address with:
  *         1. Last byte == 0x69
- *         2. Address > NOICE (0x9Cb41FD9dC6891BAe8187029461bfAADF6CC0C69)
+ *         2. Address < NOICE (0x9Cb41FD9dC6891BAe8187029461bfAADF6CC0C69)
  *
  * @dev Uses `cast create2` via FFI for fast mining (Rust implementation)
  *
@@ -28,15 +28,15 @@ contract MineOracleSalt is Script {
     address constant NOICE = 0x9Cb41FD9dC6891BAe8187029461bfAADF6CC0C69;
 
     // Token configuration (must match LaunchOracle.s.sol)
-    string constant NAME = "Tea";
-    string constant SYMBOL = "Tea";
+    string constant NAME = "oracle";
+    string constant SYMBOL = "oracle";
     string constant TOKEN_URI =
-        "ipfs://bafybeia3xdx3otq6fi7l2x5szaz5b6biex747gsyuyqi2tk3lzm66fdaiu";
+        "ipfs://bafkreidmvedswrkgcjojkjqdlqpvwqnxs6mq7eo7nvxjnphi2y6x4bcjae";
     uint256 constant INITIAL_SUPPLY = 100_000_000_000 ether;
 
     function run() public returns (bytes32, address) {
         console2.log("=== Mine Oracle Salt ===");
-        console2.log("Target: Address ending in 0x69 and > NOICE");
+        console2.log("Target: Address ending in 0x69 and < NOICE");
         console2.log("NOICE:", NOICE);
         console2.log("Token Factory:", TOKEN_FACTORY);
         console2.log("");
@@ -63,8 +63,8 @@ contract MineOracleSalt is Script {
         console2.log("Init code hash:", vm.toString(initCodeHash));
         console2.log("");
 
-        // Mine with pattern starting with f (always > 0x9C = NOICE)
-        string[1] memory startPatterns = ["f"];
+        // Mine with pattern starting with 0 (always < 0x9C = NOICE)
+        string[1] memory startPatterns = ["0"];
 
         for (uint256 i = 0; i < startPatterns.length; i++) {
             console2.log(
@@ -81,13 +81,13 @@ contract MineOracleSalt is Script {
 
             // Verify both conditions
             bool endsIn69 = uint160(predictedAddr) % 0x100 == 0x69;
-            bool greaterThanNoice = predictedAddr > NOICE;
+            bool lessThanNoice = predictedAddr < NOICE;
 
             console2.log("  Found address:", predictedAddr);
             console2.log("  Ends in 0x69:", endsIn69);
-            console2.log("  > NOICE:", greaterThanNoice);
+            console2.log("  < NOICE:", lessThanNoice);
 
-            if (endsIn69 && greaterThanNoice) {
+            if (endsIn69 && lessThanNoice) {
                 console2.log("");
                 console2.log("=== SALT FOUND! ===");
                 console2.log("Salt:", vm.toString(salt));

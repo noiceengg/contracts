@@ -516,3 +516,19 @@ For issues or questions:
 - Verify all environment variables are set correctly
 - Ensure contract addresses match network (Base Mainnet)
 - Test on Tenderly first for complex operations
+
+
+export $(cat .env | tr -d ' ' | xargs -L 1) 
+
+```
+forge script script/oracle/misc/mine/MineOracleSalt.s.sol --ffi
+
+Salt: 0xbe4a912c6c978023759b01fd1fb0e3f3f11f1fca5faacfa2b25980f821219b7b
+  Address: 0x0D186f8C94293dD8ea65d3ae3EBA3a8cAD91b769
+```
+
+```
+forge script script/oracle/launch/LaunchOracle.s.sol \
+  --rpc-url $BASE_MAINNET_RPC_URL \
+  --broadcast --private-key $PRIVATE_KEY
+```
