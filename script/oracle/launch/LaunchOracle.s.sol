@@ -60,7 +60,7 @@ contract LaunchOracle is Script {
     uint256 constant INITIAL_SUPPLY = 100_000_000_000 ether; // 100B tokens
 
      // NOICE FDV for calculations
-    uint256 constant NOICE_FDV = 32_500_000 ether; // $32.5M
+    uint256 constant NOICE_FDV = 30_730_000 ether; // $30.73M
 
     // Token amounts
     uint256 constant CREATOR_VESTING = 25_000_000_000 ether; // 25B (25%)
@@ -116,13 +116,13 @@ contract LaunchOracle is Script {
     uint256 constant PREBUY_ALLOCATION = 10_000_000_000 ether; // 10B (prebuy)
 
     // Multicurve tick boundaries (user-provided, based on NOICE FDV $34M)
-    int24 constant TICK_200K = -51000; // $200K
-    int24 constant TICK_250K = -48780; // $250K
-    int24 constant TICK_500K = -41820; // $500K
-    int24 constant TICK_1M = -34920; // $1M
-    int24 constant TICK_1_5M = -30840; // $1.5M
-    int24 constant TICK_2M = -27960; // $2M
-    int24 constant TICK_1_5B = 38220; // $1.5B
+    int24 constant TICK_200K = -50340; // $200K
+    int24 constant TICK_250K = -48120; // $250K
+    int24 constant TICK_500K = -41160; // $500K
+    int24 constant TICK_1M = -34260; // $1M
+    int24 constant TICK_1_5M = -30180; // $1.5M
+    int24 constant TICK_2M = -27300; // $2M
+    int24 constant TICK_1_5B = 38880; // $1.5B
 
     // SSL Tick Boundaries - 28 tranches (calculated for NOICE FDV $30M)
     int24 constant TICK_1_0M = -34020; // $1.0M
