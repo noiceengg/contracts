@@ -60,7 +60,7 @@ contract LaunchOracle is Script {
     uint256 constant INITIAL_SUPPLY = 100_000_000_000 ether; // 100B tokens
 
      // NOICE FDV for calculations
-    uint256 constant NOICE_FDV = 30_000_000 ether; // $30M
+    uint256 constant NOICE_FDV = 32_500_000 ether; // $32.5M
 
     // Token amounts
     uint256 constant CREATOR_VESTING = 25_000_000_000 ether; // 25B (25%)
@@ -87,6 +87,7 @@ contract LaunchOracle is Script {
     uint256 constant SSL_TRANCHE_13 = 800_000_000 ether;     // $8.4M–$9.6M
     uint256 constant SSL_TRANCHE_14 = 800_000_000 ether;     // $9.6M–$10.8M
     uint256 constant SSL_TRANCHE_15 = 800_000_000 ether;     // $10.8M–$12.0M
+
     uint256 constant SSL_TRANCHE_16 = 1_000_000_000 ether;   // $12.0M–$13.6M
     uint256 constant SSL_TRANCHE_17 = 1_000_000_000 ether;   // $13.6M–$15.2M
     uint256 constant SSL_TRANCHE_18 = 1_000_000_000 ether;   // $15.2M–$16.8M
@@ -115,13 +116,13 @@ contract LaunchOracle is Script {
     uint256 constant PREBUY_ALLOCATION = 10_000_000_000 ether; // 10B (prebuy)
 
     // Multicurve tick boundaries (user-provided, based on NOICE FDV $34M)
-    int24 constant TICK_200K = -51420; // $200K
-    int24 constant TICK_250K = -49200; // $250K
-    int24 constant TICK_500K = -42240; // $500K
-    int24 constant TICK_1M = -35340; // $1M
-    int24 constant TICK_1_5M = -31260; // $1.5M
-    int24 constant TICK_2M = -28380; // $2M
-    int24 constant TICK_1_5B = 37800; // $1.5B
+    int24 constant TICK_200K = -51000; // $200K
+    int24 constant TICK_250K = -48780; // $250K
+    int24 constant TICK_500K = -41820; // $500K
+    int24 constant TICK_1M = -34920; // $1M
+    int24 constant TICK_1_5M = -30840; // $1.5M
+    int24 constant TICK_2M = -27960; // $2M
+    int24 constant TICK_1_5B = 38220; // $1.5B
 
     // SSL Tick Boundaries - 28 tranches (calculated for NOICE FDV $30M)
     int24 constant TICK_1_0M = -34020; // $1.0M
@@ -165,6 +166,21 @@ contract LaunchOracle is Script {
         address ORACLE_SYNDICATE = 0xB0C282B5c64F293F7f4712Ee77318427055e3C3F;
         address ORACLE_ECOSYSTEM = 0x215007a3f0e7517490F9Ba5C7cda4F5b40c64ad5;
 
+        uint40 VESTING_CREATOR_IMMEDIATE_START = 1762878600;
+        uint40 VESTING_CREATOR_IMMEDIATE_END = 1762878601;
+
+        uint40 VESTING_CREATOR_VESTED_START = 1765470600;
+        uint40 VESTING_CREATOR_VESTED_END = 1797006600;
+
+        uint40 VESTING_ECOSYSTEM_IMMEDIATE_START = 1762878600;
+        uint40 VESTING_ECOSYSTEM_IMMEDIATE_END = 1762878601;
+
+        uint40 VESTING_ECOSYSTEM_VESTED_START = 1765470600;
+        uint40 VESTING_ECOSYSTEM_VESTED_END = 1797006600;
+
+        uint40 VESTING_SYNDICATE_VESTED_START = 1765470600;
+        uint40 VESTING_SYNDICATE_VESTED_END = 1797006600;
+
         // Get mined salt from environment (set by MineOracleSalt.s.sol)
         bytes32 salt = vm.envOr("ORACLE_SALT", bytes32(uint256(0)));
         require(
@@ -189,8 +205,9 @@ contract LaunchOracle is Script {
         console.log("Predicted asset address:", predictedAsset);
 
         // Verify address requirements
-        // require(uint160(predictedAsset) % 0x100 == 0x69, "Address must end in 69");
-        // require(predictedAsset < NOICE, "Address must be < NOICE");
+        require(uint160(predictedAsset) % 0x100 == 0x69, "Address must end in 69");
+        require(predictedAsset < NOICE, "Address must be < NOICE");
+
         console.log("Address verification passed!");
         console.log("");
 
@@ -304,14 +321,14 @@ contract LaunchOracle is Script {
         creatorAllocations[0] = NoiceCreatorAllocation({
             recipient: ORACLE_CREATOR,
             amount: CREATOR_VESTING,
-            lockStartTimestamp: 1765411200,
-            lockEndTimestamp: 1796947200
+            lockStartTimestamp: VESTING_CREATOR_VESTED_START,
+            lockEndTimestamp: VESTING_CREATOR_VESTED_END
         });
         creatorAllocations[1] = NoiceCreatorAllocation({
             recipient: ORACLE_CREATOR,
             amount: CREATOR_UNLOCKED,
-            lockStartTimestamp: 1762804800,
-            lockEndTimestamp: 1762804801
+            lockStartTimestamp: VESTING_CREATOR_IMMEDIATE_START,
+            lockEndTimestamp: VESTING_CREATOR_IMMEDIATE_END
         });
 
         // LP unlock tranches - 28 tranches
@@ -513,27 +530,27 @@ contract LaunchOracle is Script {
         // Noice Syndicate Fund - Participant 1: 5B vested 365 days
         prebuyParticipants[0] = NoicePrebuyParticipant({
             lockedAddress: ORACLE_SYNDICATE,
-            noiceAmount: 44_600_000 ether,
-            vestingStartTimestamp: 1765411200, // 11-12-2025
-            vestingEndTimestamp: 1796947200, // 11-12-2026
+            noiceAmount: 45_000_000 ether,
+            vestingStartTimestamp: VESTING_SYNDICATE_VESTED_START,
+            vestingEndTimestamp: VESTING_SYNDICATE_VESTED_END,
             vestingRecipient: ORACLE_SYNDICATE
         });
 
         // Noice Ecosystem Fund - Participant 2: 2.5B vested 365 days (same address as participant 1)
         prebuyParticipants[1] = NoicePrebuyParticipant({
             lockedAddress: ORACLE_ECOSYSTEM,
-            noiceAmount: 22_300_000 ether,
-            vestingStartTimestamp: 1765411200, // 11-12-2025
-            vestingEndTimestamp: 1796947200, // 11-12-2026
+            noiceAmount: 22_500_000 ether,
+            vestingStartTimestamp: VESTING_ECOSYSTEM_VESTED_START,
+            vestingEndTimestamp: VESTING_ECOSYSTEM_VESTED_END,
             vestingRecipient: ORACLE_ECOSYSTEM
         });
 
         // Noice Ecosystem Fund - Participant 3: 2.5B instant unlock (1 second vesting)
         prebuyParticipants[2] = NoicePrebuyParticipant({
             lockedAddress: ORACLE_ECOSYSTEM,
-            noiceAmount: 22_300_000 ether,
-            vestingStartTimestamp: 1762804800, // 11-11-2025
-            vestingEndTimestamp: 1762804801, // 11-11-2025
+            noiceAmount: 22_500_000 ether,
+            vestingStartTimestamp: VESTING_ECOSYSTEM_IMMEDIATE_START,
+            vestingEndTimestamp: VESTING_ECOSYSTEM_IMMEDIATE_END,
             vestingRecipient: ORACLE_ECOSYSTEM
         });
 
