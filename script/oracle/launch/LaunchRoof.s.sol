@@ -19,22 +19,21 @@ import {IHooks} from "@v4-core/interfaces/IHooks.sol";
 import {DERC20} from "src/DERC20.sol";
 
 /**
- * @title LaunchOracle
- * 
- * @notice Launch Oracle token with SSL positions and 10% atomic prebuy
- * @dev Distribution (100B total):
- *      - Creator: 35B (30B vested 24mo, 5B vested 1d)
- *      - Prebuy: 10B (exact output, vested 1yr)
- *      - SSL: 15B (4 tranches)
- *      - Public: 40B (multicurve)
+ * @title LaunchRoof
+ *
+ * @notice Launch Roof token with SSL positions and 10% atomic prebuy
+ * @dev Distribution (100M total):
+ *      - Creator: 50M (20M vested 6mo, 10M community instant, 8M roof secondary instant, 2M EF instant, 10M roof aero instant)
+ *      - Multicurve: 40M (includes 10M prebuy)
+ *      - SSL: 10M (14 tranches)
  *
  *      Set ORACLE_SALT env var with salt from MineOracleSalt.s.sol
  *
- *      Run with: forge script script/oracle/launch/LaunchOracle.s.sol \
+ *      Run with: forge script script/oracle/launch/LaunchRoof.s.sol \
  *      --rpc-url $BASE_MAINNET_RPC_URL \
  *      --broadcast --private-key $PRIVATE_KEY
  */
-contract LaunchOracle is Script {
+contract LaunchRoof is Script {
     // NoiceLaunchpad address
     address constant LAUNCHPAD = 0x004bC4469f19FBEc23354fAae0CAE01afb3f4069;
 
@@ -59,21 +58,22 @@ contract LaunchOracle is Script {
         "ipfs://bafkreienolrouemvxnpztffgo5ewh6q5km2ohahf5xnljztyi3ii7whixe";
     uint256 constant INITIAL_SUPPLY = 100_000_000 ether; // 100M tokens
 
-    // Creator allocations (40M total = 40%)
+    // Creator allocations (50M total = 50%)
     uint256 constant CREATOR_TEAM_VESTING = 20_000_000 ether;    // 20% - Team vesting (6mo)
     uint256 constant CREATOR_COMMUNITY = 10_000_000 ether;       // 10% - Community (instant)
     uint256 constant CREATOR_ROOF_SECONDARY = 8_000_000 ether;   // 8% - Noice Roof secondary (instant)
     uint256 constant CREATOR_NOICE_EF = 2_000_000 ether;         // 2% - Noice EF (instant)
+    uint256 constant CREATOR_ROOF_AERO = 10_000_000 ether;       // 10% - Noice Roof aero (instant)
 
-    // Multicurve amounts (50M total = 50% of supply, includes prebuy)
-    uint256 constant CURVE_0_TOKENS = 500_000 ether;        // 1% @ 250k-500k
-    uint256 constant CURVE_1_TOKENS = 1_064_500 ether;      // 2.129% @ 500k-750k
-    uint256 constant CURVE_2_TOKENS = 8_435_500 ether;      // 16.871% @ 750k-1m
-    uint256 constant CURVE_3_TOKENS = 3_000_000 ether;      // 6% @ 1m-2.5m
-    uint256 constant CURVE_4_TOKENS = 4_000_000 ether;      // 8% @ 1.75m-2.5m
-    uint256 constant CURVE_5_TOKENS = 33_000_000 ether;     // 66% @ 2.5m-1.5B (constant position)
+    // Multicurve amounts (40M total = 40% of supply, includes prebuy)
+    uint256 constant CURVE_0_TOKENS = 500_000 ether;        // 1.25% of 40M @ 250k-500k
+    uint256 constant CURVE_1_TOKENS = 1_064_500 ether;      // 2.66% of 40M @ 500k-750k
+    uint256 constant CURVE_2_TOKENS = 8_435_500 ether;      // 21.09% of 40M @ 750k-1m
+    uint256 constant CURVE_3_TOKENS = 3_000_000 ether;      // 7.5% of 40M @ 1m-2.5m
+    uint256 constant CURVE_4_TOKENS = 4_000_000 ether;      // 10% of 40M @ 1.75m-2.5m
+    uint256 constant CURVE_5_TOKENS = 23_000_000 ether;     // 57.5% of 40M @ 2.5m-1.5B (reduced from 33M)
 
-    uint256 constant NUM_TOKENS_TO_SELL = 50_000_000 ether; // 50M for public sale
+    uint256 constant NUM_TOKENS_TO_SELL = 40_000_000 ether; // 40M for public sale
     uint256 constant PREBUY_ALLOCATION = 10_000_000 ether;  // 10M for atomic prebuy (exact output)
     uint256 constant PREBUY_USDC_AMOUNT = 83_000 * 1e6;     // ~83k USDC for prebuy
 
@@ -181,58 +181,58 @@ contract LaunchOracle is Script {
 
         bytes memory governanceFactoryData = abi.encode(address(launchpad));
 
-        // Multicurve: 6 curves (50M total)
+        // Multicurve: 6 curves (40M total)
         Curve[] memory curves = new Curve[](6);
 
-        // Prebuy curves (250k-1m, 10M total = 20% of 50M)
-        // Curve 0: 0.5M @ $250K-$500K - 1% of 50M
+        // Prebuy curves (250k-1m, 10M total = 25% of 40M)
+        // Curve 0: 0.5M @ $250K-$500K - 1.25% of 40M
         curves[0] = Curve({
             tickLower: TICK_250K,
             tickUpper: TICK_500K,
             numPositions: 1,
-            shares: 10000000000000000 // 1%
+            shares: 12500000000000000 // 1.25%
         });
 
-        // Curve 1: 1.0645M @ $500K-$750K - 2.129% of 50M
+        // Curve 1: 1.0645M @ $500K-$750K - 2.66% of 40M
         curves[1] = Curve({
             tickLower: TICK_500K,
             tickUpper: TICK_750K,
             numPositions: 1,
-            shares: 21290000000000000 // 2.129%
+            shares: 26612500000000000 // 2.66125%
         });
 
-        // Curve 2: 8.4355M @ $750K-$1M - 16.871% of 50M
+        // Curve 2: 8.4355M @ $750K-$1M - 21.09% of 40M
         curves[2] = Curve({
             tickLower: TICK_750K,
             tickUpper: TICK_1M,
             numPositions: 1,
-            shares: 168710000000000000 // 16.871%
+            shares: 210887500000000000 // 21.08875%
         });
 
-        // Public sale curves (1m-2.5m, 7M total = 14% of 50M)
-        // Curve 3: 3M @ $1M-$2.5M - 6% of 50M
+        // Public sale curves (1m-2.5m, 7M total = 17.5% of 40M)
+        // Curve 3: 3M @ $1M-$2.5M - 7.5% of 40M
         curves[3] = Curve({
             tickLower: TICK_1M,
             tickUpper: TICK_2_5M,
             numPositions: 5,
-            shares: 60000000000000000 // 6%
+            shares: 75000000000000000 // 7.5%
         });
 
-        // Curve 4: 4M @ $1.75M-$2.5M (overlaps) - 8% of 50M
+        // Curve 4: 4M @ $1.75M-$2.5M (overlaps) - 10% of 40M
         curves[4] = Curve({
             tickLower: TICK_1_75M,
             tickUpper: TICK_2_5M,
             numPositions: 5,
-            shares: 80000000000000000 // 8%
+            shares: 100000000000000000 // 10%
         });
 
-        // Constant position curve (2.5m-1.5B, 33M = 66% of 50M)
-        // Curve 5: 33M @ $2.5M-$1.5B - 66% of 50M
+        // Constant position curve (2.5m-1.5B, 23M = 57.5% of 40M)
+        // Curve 5: 23M @ $2.5M-$1.5B - 57.5% of 40M (reduced from 33M)
         curves[5] = Curve({
             tickLower: TICK_2_5M,
             tickUpper: TICK_1_5B,
             numPositions: 1,
-            shares: 660000000000000000 // 66%
+            shares: 575000000000000000 // 57.5%
         });
 
         // Fee beneficiaries
@@ -271,9 +271,9 @@ contract LaunchOracle is Script {
             salt: salt
         });
 
-        // Creator allocations: 40M total (20M vested 6mo, 10M instant, 8M instant, 2M instant)
+        // Creator allocations: 50M total (20M vested 6mo, 10M instant, 8M instant, 2M instant, 10M instant)
         NoiceCreatorAllocation[]
-            memory creatorAllocations = new NoiceCreatorAllocation[](4);
+            memory creatorAllocations = new NoiceCreatorAllocation[](5);
 
         // Team vesting (20M, 6 months)
         creatorAllocations[0] = NoiceCreatorAllocation({
@@ -303,6 +303,14 @@ contract LaunchOracle is Script {
         creatorAllocations[3] = NoiceCreatorAllocation({
             recipient: NOICE_EF,
             amount: CREATOR_NOICE_EF,
+            lockStartTimestamp: INSTANT_START,
+            lockEndTimestamp: INSTANT_END
+        });
+
+        // Noice Roof aero (10M, instant)
+        creatorAllocations[4] = NoiceCreatorAllocation({
+            recipient: ROOF_SECONDARY,
+            amount: CREATOR_ROOF_AERO,
             lockStartTimestamp: INSTANT_START,
             lockEndTimestamp: INSTANT_END
         });
@@ -427,20 +435,21 @@ contract LaunchOracle is Script {
         console.log("- Total Supply: 100M tokens");
         console.log("- Numeraire: USDC (6 decimals)");
         console.log("- Fee: 2%");
-        console.log("- Multicurve: 6 curves, 50M tokens (50%)");
-        console.log("  - Curve 0: 0.5M @ $250K-$500K (1%)");
-        console.log("  - Curve 1: 1.06M @ $500K-$750K (2.13%)");
-        console.log("  - Curve 2: 8.44M @ $750K-$1M (16.87%)");
-        console.log("  - Curve 3: 3M @ $1M-$2.5M (6%, 5 positions)");
-        console.log("  - Curve 4: 4M @ $1.75M-$2.5M (8%, 5 positions, overlaps)");
-        console.log("  - Curve 5: 33M @ $2.5M-$1.5B (66%, constant position)");
+        console.log("- Multicurve: 6 curves, 40M tokens (40%)");
+        console.log("  - Curve 0: 0.5M @ $250K-$500K (1.25%)");
+        console.log("  - Curve 1: 1.06M @ $500K-$750K (2.66%)");
+        console.log("  - Curve 2: 8.44M @ $750K-$1M (21.09%)");
+        console.log("  - Curve 3: 3M @ $1M-$2.5M (7.5%, 5 positions)");
+        console.log("  - Curve 4: 4M @ $1.75M-$2.5M (10%, 5 positions, overlaps)");
+        console.log("  - Curve 5: 23M @ $2.5M-$1.5B (57.5%, constant position)");
         console.log("- Prebuy: 10M tokens for 83k USDC (instant unlock)");
         console.log("- SSL: 14 tranches, 10M tokens total (10%, $1M-$15M)");
-        console.log("- Creator: 40M tokens (40%)");
+        console.log("- Creator: 50M tokens (50%)");
         console.log("  - Team vesting: 20M (6 months)");
         console.log("  - Community: 10M (instant)");
         console.log("  - Roof secondary: 8M (instant)");
         console.log("  - Noice EF: 2M (instant)");
+        console.log("  - Roof aero: 10M (instant)");
         console.log("");
 
         // Approve NOICE for launchpad (for prebuy)
