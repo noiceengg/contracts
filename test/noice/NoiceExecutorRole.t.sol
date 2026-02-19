@@ -3,10 +3,9 @@ pragma solidity ^0.8.24;
 
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
 import {
-    BundleWithVestingParams,
-    NoiceCreatorAllocation,
-    NoicePrebuyParticipant,
-    NoiceLpUnlockTranche
+    BundleParams,
+    NumeraireCreatorAllocation,
+    NumeraireLpUnlockTranche
 } from "src/NoiceLaunchpad.sol";
 
 /**
@@ -38,12 +37,11 @@ contract NoiceExecutorRoleTest is NoiceBaseTest {
     }
 
     function test_AnyAddressCanCallBundleWithCreatorVesting() public {
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks);
+        
         vm.prank(unauthorized);
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
         assertNotEq(latestAsset, address(0));
@@ -54,98 +52,94 @@ contract NoiceExecutorRoleTest is NoiceBaseTest {
         uint256 unlockPercentage = 1000;
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
         tranches[0] =
-            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
+            NumeraireLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
         vm.prank(unauthorized);
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         vm.prank(unauthorized);
-        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
-        assertTrue(launchpad.noiceLpUnlockPositionWithdrawn(latestAsset, 0));
+        launchpad.withdrawNumeraireLpUnlockPosition(latestAsset, 0, recipient1);
+        assertTrue(launchpad.numeraireLpUnlockPositionWithdrawn(latestAsset, 0));
     }
 
     function test_RecipientCanWithdrawLpUnlock() public {
         uint256 unlockPercentage = 1000;
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
         tranches[0] =
-            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
+            NumeraireLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         vm.prank(recipient1);
-        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
-        assertTrue(launchpad.noiceLpUnlockPositionWithdrawn(latestAsset, 0));
+        launchpad.withdrawNumeraireLpUnlockPosition(latestAsset, 0, recipient1);
+        assertTrue(launchpad.numeraireLpUnlockPositionWithdrawn(latestAsset, 0));
     }
 
     function test_ExecutorCannotWithdrawUnlessCreatorOrRecipient() public {
         uint256 unlockPercentage = 1000;
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
         tranches[0] =
-            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
+            NumeraireLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         launchpad.grantRoles(executor, launchpad.EXECUTOR_ROLE());
 
         vm.prank(executor);
         vm.expectRevert();
-        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+        launchpad.withdrawNumeraireLpUnlockPosition(latestAsset, 0, recipient1);
     }
 
     function test_ThirdPartyCannotWithdrawLpUnlock() public {
         uint256 unlockPercentage = 1000;
         uint256 tokenAmount = TOTAL_SUPPLY * unlockPercentage / 10_000;
 
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
         tranches[0] =
-            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
+            NumeraireLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         vm.prank(attacker);
         vm.expectRevert();
-        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+        launchpad.withdrawNumeraireLpUnlockPosition(latestAsset, 0, recipient1);
     }
 
     function test_OnlyOwnerCanCancelVestingStreams() public {
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](1);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](1);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: recipient1,
             amount: 45_000_000_000e18,
+            useVesting: true,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParams(allocations);
+        
+        launchpad.bundleWithCreatorAllocations(params);
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         uint256 streamId = sablierLockup.nextStreamId() - 1;

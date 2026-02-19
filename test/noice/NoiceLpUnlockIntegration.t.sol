@@ -3,11 +3,10 @@ pragma solidity ^0.8.24;
 
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
 import {
-    NoiceLaunchpad,
-    BundleWithVestingParams,
-    NoiceCreatorAllocation,
-    NoicePrebuyParticipant,
-    NoiceLpUnlockTranche
+    NumeraireLaunchpad,
+    BundleParams,
+    NumeraireCreatorAllocation,
+    NumeraireLpUnlockTranche
 } from "src/NoiceLaunchpad.sol";
 import { Airlock, ModuleState } from "src/Airlock.sol";
 import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
@@ -49,27 +48,26 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
         int24 tickUpper = 19_980; // Multiple of 60, below current tick
 
         // Create valid tranches - positions BELOW current tick (asset is token1, tick ~20040)
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
-        tranches[0] = NoiceLpUnlockTranche({
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
+        tranches[0] = NumeraireLpUnlockTranche({
             amount: tokenAmount,
             tickLower: tickLower,
             tickUpper: tickUpper,
             recipient: recipient1
         });
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Verify position created
-        uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        uint256 positionCount = launchpad.getNumeraireLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 1, "Should have 1 LP unlock position");
 
-        Position[] memory positions = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        Position[] memory positions = launchpad.getNumeraireLpUnlockPositions(latestAsset);
         assertEq(positions.length, 1, "Should return 1 position");
 
         // Verify position details
@@ -91,7 +89,7 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
         assertEq(positions[0].liquidity, actualLiquidity, "Stored liquidity should match actual");
 
         // Verify recipient mapping
-        address storedRecipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, 0);
+        address storedRecipient = launchpad.numeraireLpUnlockPositionRecipient(latestAsset, 0);
         assertEq(storedRecipient, recipient1, "Recipient mismatch");
     }
 
@@ -106,11 +104,11 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
         uint256[3] memory tokenShares = [uint256(40), 35, 25]; // Percentage shares
 
         // Create tranches with token amounts
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](3);
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](3);
         for (uint256 i = 0; i < 3; i++) {
             uint256 trancheTokenAmount = totalTokenAmount * tokenShares[i] / 100;
 
-            tranches[i] = NoiceLpUnlockTranche({
+            tranches[i] = NumeraireLpUnlockTranche({
                 amount: trancheTokenAmount,
                 tickLower: tickLowers[i],
                 tickUpper: tickUppers[i],
@@ -118,19 +116,18 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
             });
         }
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Verify 3 positions created
-        uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        uint256 positionCount = launchpad.getNumeraireLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 3, "Should have 3 LP unlock positions");
 
-        Position[] memory positions = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        Position[] memory positions = launchpad.getNumeraireLpUnlockPositions(latestAsset);
         assertEq(positions.length, 3, "Should return 3 positions");
 
         // Get pool key to query actual liquidity from PoolManager
@@ -138,7 +135,7 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
         (,, PoolKey memory poolKey,) = UniswapV4MulticurveInitializer(address(poolInitializer)).getState(latestAsset);
 
         for (uint256 i = 0; i < 3; i++) {
-            address storedRecipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, i);
+            address storedRecipient = launchpad.numeraireLpUnlockPositionRecipient(latestAsset, i);
             assertEq(storedRecipient, tranches[i].recipient, "Recipient mismatch");
             assertEq(positions[i].tickLower, tranches[i].tickLower, "Tick lower mismatch");
             assertEq(positions[i].tickUpper, tranches[i].tickUpper, "Tick upper mismatch");
@@ -163,36 +160,35 @@ contract NoiceLpUnlockIntegrationTest is NoiceBaseTest {
         int24 tickLower = 10_020;
         int24 tickUpper = 19_980;
 
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
-        tranches[0] = NoiceLpUnlockTranche({
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
+        tranches[0] = NumeraireLpUnlockTranche({
             amount: tokenAmount,
             tickLower: tickLower,
             tickUpper: tickUpper,
             recipient: recipient1
         });
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Non-owner tries to withdraw
         vm.prank(recipient2);
         vm.expectRevert(); // Ownable revert
-        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+        launchpad.withdrawNumeraireLpUnlockPosition(latestAsset, 0, recipient1);
 
         // Owner withdraws to recipient1
-        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+        launchpad.withdrawNumeraireLpUnlockPosition(latestAsset, 0, recipient1);
 
         // Verify position marked as withdrawn
-        bool isWithdrawn = launchpad.noiceLpUnlockPositionWithdrawn(latestAsset, 0);
+        bool isWithdrawn = launchpad.numeraireLpUnlockPositionWithdrawn(latestAsset, 0);
         assertTrue(isWithdrawn, "Position should be marked as withdrawn");
 
         // Try to withdraw again - should fail
         vm.expectRevert("Already withdrawn");
-        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+        launchpad.withdrawNumeraireLpUnlockPosition(latestAsset, 0, recipient1);
     }
 }

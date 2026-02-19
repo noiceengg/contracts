@@ -19,7 +19,7 @@ contract TestMulticurveHook is BaseHook {
     /// @notice Address of the Uniswap V4 Multicurve Initializer contract
     address public immutable initializer;
 
-    /// @notice Address of the NoiceLaunchpad contract
+    /// @notice Address of the NumeraireLaunchpad contract
     address public immutable launchpad;
 
     /// @notice Modifier to ensure the caller is authorized (initializer OR launchpad)
@@ -35,7 +35,7 @@ contract TestMulticurveHook is BaseHook {
      * @notice Constructor for the Test Multicurve Hook
      * @param manager Address of the Uniswap V4 Pool Manager
      * @param initializer_ Address of the Uniswap V4 Multicurve Initializer contract
-     * @param launchpad_ Address of the NoiceLaunchpad contract
+     * @param launchpad_ Address of the NumeraireLaunchpad contract
      */
     constructor(IPoolManager manager, address initializer_, address launchpad_) BaseHook(manager) {
         initializer = initializer_;

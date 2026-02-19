@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
-import { BundleWithVestingParams, NoiceCreatorAllocation, NoicePrebuyParticipant } from "src/NoiceLaunchpad.sol";
+import { BundleParams, NumeraireCreatorAllocation } from "src/NoiceLaunchpad.sol";
 import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
 
 /**
@@ -16,11 +16,10 @@ contract NoiceSweepTest is NoiceBaseTest {
 
     function test_Sweep_TokensToRecipient() public {
         // Launch token to get some dust
-        NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(locks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory locks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(locks);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
@@ -60,11 +59,10 @@ contract NoiceSweepTest is NoiceBaseTest {
 
     function test_Sweep_OnlyOwner() public {
         // Launch token to get some dust
-        NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(locks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory locks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(locks);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 

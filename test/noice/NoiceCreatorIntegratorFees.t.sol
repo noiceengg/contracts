@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
-import { BundleWithVestingParams, NoiceCreatorAllocation, NoicePrebuyParticipant } from "src/NoiceLaunchpad.sol";
+import { BundleParams, NumeraireCreatorAllocation } from "src/NoiceLaunchpad.sol";
 import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
 
 contract NoiceCreatorIntegratorFeesTest is NoiceBaseTest {
@@ -11,12 +11,11 @@ contract NoiceCreatorIntegratorFeesTest is NoiceBaseTest {
     address public feeRecipient = makeAddr("feeRecipient");
 
     function test_CreatorIsIntegratorAndCanCollectIntegratorFees() public {
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks);
+        
         vm.prank(creator);
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         address asset = _computeAssetAddress(params.createData.salt);
         (,,,,,,,,, address integrator) = airlock.getAssetData(asset);

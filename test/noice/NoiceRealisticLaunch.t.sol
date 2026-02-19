@@ -4,11 +4,10 @@ pragma solidity ^0.8.24;
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
 import { console2 } from "forge-std/console2.sol";
 import {
-    NoiceLaunchpad,
-    BundleWithVestingParams,
-    NoiceCreatorAllocation,
-    NoicePrebuyParticipant,
-    NoiceLpUnlockTranche
+    NumeraireLaunchpad,
+    BundleParams,
+    NumeraireCreatorAllocation,
+    NumeraireLpUnlockTranche
 } from "src/NoiceLaunchpad.sol";
 import { Airlock, ModuleState } from "src/Airlock.sol";
 import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
@@ -109,7 +108,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         );
 
         // Deploy launchpad
-        launchpad = new NoiceLaunchpad(airlock, router, sablierLockup, sablierBatchLockup, poolManager, address(this));
+        launchpad = new NumeraireLaunchpad(airlock, router, sablierLockup, sablierBatchLockup, poolManager, address(this));
 
         // Deploy custom hook that whitelists both initializer AND launchpad
         deployCodeTo(
@@ -160,8 +159,8 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
 
     /// @notice Create LP unlock tranches at realistic market cap milestones
     /// @return tranches Array of 5 LP unlock tranches
-    function _createRealisticLpUnlockTranches() internal view returns (NoiceLpUnlockTranche[] memory) {
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](5);
+    function _createRealisticLpUnlockTranches() internal view returns (NumeraireLpUnlockTranche[] memory) {
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](5);
 
         for (uint256 i = 0; i < 5; i++) {
             int24 tickUpper = _mcapToTick(LP_UNLOCK_MCAPS[i]);
@@ -172,7 +171,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
             tickLower = (tickLower / 60) * 60;
             tickUpper = (tickUpper / 60) * 60;
 
-            tranches[i] = NoiceLpUnlockTranche({
+            tranches[i] = NumeraireLpUnlockTranche({
                 amount: LP_UNLOCK_AMOUNTS[i],
                 tickLower: tickLower,
                 tickUpper: tickUpper,
@@ -185,12 +184,12 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
 
     /// @notice Override to use realistic starting price curves (DISABLED - causes LP unlock validation issues)
     /// @dev Commented out because custom curves prevent LP unlock positions from being created
-    /// The NoiceLaunchpad validates LP unlock positions against current tick, which depends on curve configuration
+    /// The NumeraireLaunchpad validates LP unlock positions against current tick, which depends on curve configuration
     function _createBundleParamsRealistic(
-        NoiceCreatorAllocation[] memory noiceCreatorLocks,
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks,
         uint256 lpUnlockPercentage,
-        NoiceLpUnlockTranche[] memory lpUnlockTranches
-    ) internal view returns (BundleWithVestingParams memory params) {
+        NumeraireLpUnlockTranche[] memory lpUnlockTranches
+    ) internal view returns (BundleParams memory params) {
         // Create curves that start at initial tick (-58,000) and go up
         // Distribute liquidity across price ranges from $100K to higher prices
         Curve[] memory curves = new Curve[](3);
@@ -277,7 +276,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
             salt: keccak256(abi.encodePacked("realistic-launch-", block.timestamp, lpUnlockPercentage))
         });
 
-        return BundleWithVestingParams({
+        return BundleParams({
             createData: createData,
             noiceCreatorAllocations: noiceCreatorLocks,
             noiceLpUnlockTranches: lpUnlockTranches,
@@ -296,27 +295,26 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         int24 tickUpper = 19_980; // Multiple of 60, below current tick
 
         // Create valid tranches
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
-        tranches[0] = NoiceLpUnlockTranche({
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
+        tranches[0] = NumeraireLpUnlockTranche({
             amount: tokenAmount,
             tickLower: tickLower,
             tickUpper: tickUpper,
             recipient: recipient1
         });
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Verify position created
-        uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        uint256 positionCount = launchpad.getNumeraireLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 1, "Should have 1 LP unlock position");
 
-        Position[] memory positions = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        Position[] memory positions = launchpad.getNumeraireLpUnlockPositions(latestAsset);
         assertEq(positions.length, 1, "Should return 1 position");
 
         // Verify position details
@@ -339,7 +337,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         assertEq(positions[0].liquidity, actualLiquidity, "Stored liquidity should match actual");
 
         // Verify recipient mapping
-        address storedRecipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, 0);
+        address storedRecipient = launchpad.numeraireLpUnlockPositionRecipient(latestAsset, 0);
         assertEq(storedRecipient, recipient1, "Recipient mismatch");
     }
 
@@ -355,11 +353,11 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         uint256[3] memory tokenShares = [uint256(40), 35, 25]; // Percentage shares
 
         // Create tranches with token amounts
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](3);
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](3);
         for (uint256 i = 0; i < 3; i++) {
             uint256 trancheTokenAmount = totalTokenAmount * tokenShares[i] / 100;
 
-            tranches[i] = NoiceLpUnlockTranche({
+            tranches[i] = NumeraireLpUnlockTranche({
                 amount: trancheTokenAmount,
                 tickLower: tickLowers[i],
                 tickUpper: tickUppers[i],
@@ -367,19 +365,18 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
             });
         }
 
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Verify 3 positions created
-        uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        uint256 positionCount = launchpad.getNumeraireLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 3, "Should have 3 LP unlock positions");
 
-        Position[] memory positions = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        Position[] memory positions = launchpad.getNumeraireLpUnlockPositions(latestAsset);
         assertEq(positions.length, 3, "Should return 3 positions");
 
         // Get pool key to query actual liquidity from PoolManager
@@ -387,7 +384,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         (,, PoolKey memory poolKey,) = UniswapV4MulticurveInitializer(address(poolInitializer)).getState(latestAsset);
 
         for (uint256 i = 0; i < 3; i++) {
-            address storedRecipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, i);
+            address storedRecipient = launchpad.numeraireLpUnlockPositionRecipient(latestAsset, i);
             assertEq(storedRecipient, tranches[i].recipient, "Recipient mismatch");
             assertEq(positions[i].tickLower, tranches[i].tickLower, "Tick lower mismatch");
             assertEq(positions[i].tickUpper, tranches[i].tickUpper, "Tick upper mismatch");
@@ -409,24 +406,23 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
     /// To enable this test, would need custom curve configuration starting at lower initial price
     function skip_test_RealisticLaunch_FiveTranches_MarketCapMilestones() public {
         // Create 5 realistic tranches
-        NoiceLpUnlockTranche[] memory tranches = _createRealisticLpUnlockTranches();
+        NumeraireLpUnlockTranche[] memory tranches = _createRealisticLpUnlockTranches();
 
         for (uint256 i = 0; i < 5; i++) { }
 
         uint256 lpUnlockPercentage = 500; // 5% = 500 bps
-        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
-        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks = new NumeraireCreatorAllocation[](0);
+        BundleParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Verify 5 positions created
-        uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        uint256 positionCount = launchpad.getNumeraireLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 5, "Should have 5 LP unlock positions");
 
-        Position[] memory positions = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        Position[] memory positions = launchpad.getNumeraireLpUnlockPositions(latestAsset);
         assertEq(positions.length, 5, "Should return 5 positions");
 
         // Get pool key to query actual liquidity from PoolManager
@@ -435,7 +431,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
 
         uint256 totalLiquidity = 0;
         for (uint256 i = 0; i < 5; i++) {
-            address storedRecipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, i);
+            address storedRecipient = launchpad.numeraireLpUnlockPositionRecipient(latestAsset, i);
             assertEq(storedRecipient, tranches[i].recipient, "Recipient mismatch");
             assertEq(positions[i].tickLower, tranches[i].tickLower, "Tick lower mismatch");
             assertEq(positions[i].tickUpper, tranches[i].tickUpper, "Tick upper mismatch");
@@ -459,8 +455,8 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
     function test_RealisticDistribution_Full() public {
         // Setup creator allocation (50% = 50B tokens)
         address creator = makeAddr("creator");
-        NoiceCreatorAllocation[] memory creatorAllocs = new NoiceCreatorAllocation[](1);
-        creatorAllocs[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory creatorAllocs = new NumeraireCreatorAllocation[](1);
+        creatorAllocs[0] = NumeraireCreatorAllocation({
             recipient: creator,
             amount: 50_000_000_000e18, // 50B tokens
             lockStartTimestamp: uint40(block.timestamp),
@@ -468,26 +464,26 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         });
 
         // Setup LP unlock tranches (5% = 5B tokens across 4 tranches)
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](4);
-        tranches[0] = NoiceLpUnlockTranche({
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](4);
+        tranches[0] = NumeraireLpUnlockTranche({
             amount: 1_250_000_000e18, // 1.25B tokens (25%)
             tickLower: -35_460,
             tickUpper: -28_500,
             recipient: recipient1
         });
-        tranches[1] = NoiceLpUnlockTranche({
+        tranches[1] = NumeraireLpUnlockTranche({
             amount: 1_250_000_000e18, // 1.25B tokens (25%)
             tickLower: -19_320,
             tickUpper: -17_520,
             recipient: recipient2
         });
-        tranches[2] = NoiceLpUnlockTranche({
+        tranches[2] = NumeraireLpUnlockTranche({
             amount: 1_500_000_000e18, // 1.5B tokens (30%)
             tickLower: -12_420,
             tickUpper: -8340,
             recipient: recipient1
         });
-        tranches[3] = NoiceLpUnlockTranche({
+        tranches[3] = NumeraireLpUnlockTranche({
             amount: 1_000_000_000e18, // 1B tokens (20%)
             tickLower: -5460,
             tickUpper: -1440,
@@ -495,7 +491,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         });
 
         // Create bundle params with custom multicurve (42% = 42B tokens)
-        BundleWithVestingParams memory params = _createRealisticBundleParams(creatorAllocs, tranches);
+        BundleParams memory params = _createRealisticBundleParams(creatorAllocs, tranches);
 
         // Setup prebuy (3% = 3B tokens)
         uint256 prebuyAmount = 3_000_000_000e18; // 3B tokens
@@ -507,8 +503,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         vm.prank(buyer);
         IERC20(NOICE_TOKEN).approve(address(launchpad), maxNoiceInput);
 
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](1);
-        participants[0] = NoicePrebuyParticipant({
+                participants[0] = NoicePrebuyParticipant({
             lockedAddress: buyer,
             noiceAmount: maxNoiceInput,
             vestingStartTimestamp: uint40(block.timestamp),
@@ -559,18 +554,18 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         params.noicePrebuyInputs = inputs;
 
         // Execute launch
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
         // Verify LP unlock positions created
-        uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        uint256 positionCount = launchpad.getNumeraireLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 4, "Should have 4 LP unlock positions");
 
         // Verify token distribution
         // Note: Can't verify exact LP amounts without complex liquidity math
         // But verify that positions exist and are non-zero
-        Position[] memory positions = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        Position[] memory positions = launchpad.getNumeraireLpUnlockPositions(latestAsset);
         assertEq(positions.length, 4, "Should return 4 positions");
 
         for (uint256 i = 0; i < 4; i++) {
@@ -585,8 +580,8 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
     function test_NoiceRealisticChartTest() public {
         // Setup creator allocation (40% = 40B tokens)
         address creator = makeAddr("creator");
-        NoiceCreatorAllocation[] memory creatorAllocs = new NoiceCreatorAllocation[](1);
-        creatorAllocs[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory creatorAllocs = new NumeraireCreatorAllocation[](1);
+        creatorAllocs[0] = NumeraireCreatorAllocation({
             recipient: creator,
             amount: 40_000_000_000e18, // 40B tokens
             lockStartTimestamp: uint40(block.timestamp),
@@ -594,8 +589,8 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         });
 
         // Setup LP unlock tranches (10% = 10B tokens in single position $1M-$10M)
-        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
-        tranches[0] = NoiceLpUnlockTranche({
+        NumeraireLpUnlockTranche[] memory tranches = new NumeraireLpUnlockTranche[](1);
+        tranches[0] = NumeraireLpUnlockTranche({
             amount: 10_000_000_000e18, // 10B tokens (100% of LP unlock)
             tickLower: -35_460, // $1M
             tickUpper: -12_420, // $10M
@@ -603,7 +598,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         });
 
         // Create bundle params with custom multicurve (40% = 40B tokens for LP, 10% = 10B for prebuy)
-        BundleWithVestingParams memory params = _createRealisticBundleParams(creatorAllocs, tranches);
+        BundleParams memory params = _createRealisticBundleParams(creatorAllocs, tranches);
 
         // Setup prebuy (10% = 10B tokens at $100K-$125K mcap)
         uint256 prebuyAmount = 10_000_000_000e18; // 10B tokens
@@ -615,8 +610,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         vm.prank(buyer);
         IERC20(NOICE_TOKEN).approve(address(launchpad), maxNoiceInput);
 
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](1);
-        participants[0] = NoicePrebuyParticipant({
+                participants[0] = NoicePrebuyParticipant({
             lockedAddress: buyer,
             noiceAmount: maxNoiceInput,
             vestingStartTimestamp: uint40(block.timestamp),
@@ -671,7 +665,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         console2.log("Buyer initial NOICE balance:", buyerInitialBalance);
 
         // Execute launch
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
@@ -712,11 +706,11 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         assertGt(launchpadNoiceBalance, 0, "Excess NOICE should be in launchpad waiting to be swept");
 
         // Verify LP unlock positions created
-        uint256 positionCount = launchpad.getNoiceLpUnlockPositionCount(latestAsset);
+        uint256 positionCount = launchpad.getNumeraireLpUnlockPositionCount(latestAsset);
         assertEq(positionCount, 1, "Should have 1 LP unlock position");
 
         // Get positions for data export
-        Position[] memory lpUnlockPositions = launchpad.getNoiceLpUnlockPositions(latestAsset);
+        Position[] memory lpUnlockPositions = launchpad.getNumeraireLpUnlockPositions(latestAsset);
         assertEq(lpUnlockPositions.length, 1, "Should return 1 position");
 
         // Get multicurve positions
@@ -769,7 +763,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         );
 
         for (uint256 i = 0; i < lpUnlockPositions.length; i++) {
-            address recipient = launchpad.noiceLpUnlockPositionRecipient(latestAsset, i);
+            address recipient = launchpad.numeraireLpUnlockPositionRecipient(latestAsset, i);
 
             // Calculate token amounts from liquidity
             (uint256 amount0, uint256 amount1) = _calculateTokenAmountsFromLiquidity(
@@ -826,9 +820,9 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
 
     /// @notice Create realistic bundle params with multicurve to $10M + constant liquidity after
     function _createRealisticBundleParams(
-        NoiceCreatorAllocation[] memory creatorAllocs,
-        NoiceLpUnlockTranche[] memory lpUnlockTranches
-    ) internal view returns (BundleWithVestingParams memory params) {
+        NumeraireCreatorAllocation[] memory creatorAllocs,
+        NumeraireLpUnlockTranche[] memory lpUnlockTranches
+    ) internal view returns (BundleParams memory params) {
         // 3-curve configuration (50% LP = 50B tokens: 10B prebuy + 40B LP)
         // Curve 0: Prebuy at $100K-$125K mcap - 10B tokens (20% of total LP allocation)
         // Curve 1: Main multicurve ($125K-$1M) with 20 positions (16% of total LP)
@@ -913,7 +907,7 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
             salt: keccak256(abi.encodePacked("realistic-full-distribution-", block.timestamp))
         });
 
-        return BundleWithVestingParams({
+        return BundleParams({
             createData: createData,
             noiceCreatorAllocations: creatorAllocs,
             noiceLpUnlockTranches: lpUnlockTranches,

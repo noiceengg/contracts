@@ -4,11 +4,11 @@ pragma solidity ^0.8.24;
 import { Test } from "forge-std/Test.sol";
 import { console2 } from "forge-std/console2.sol";
 import {
-    NoiceLaunchpad,
-    BundleWithVestingParams,
-    NoiceCreatorAllocation,
-    NoicePrebuyParticipant,
-    NoiceLpUnlockTranche
+    NumeraireLaunchpad,
+    BundleParams,
+    NumeraireCreatorAllocation,
+    NumeraireLpUnlockTranche,
+    PrebuyTranche
 } from "src/NoiceLaunchpad.sol";
 import { Airlock, CreateParams, ModuleState } from "src/Airlock.sol";
 import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
@@ -34,16 +34,16 @@ import { IV4Router } from "@v4-periphery/interfaces/IV4Router.sol";
 
 /**
  * @title NoiceBaseTest
- * @notice Base test contract with common setup and utilities for NoiceLaunchpad tests
+ * @notice Base test contract with common setup and utilities for NumeraireLaunchpad tests
  * @dev All test contracts should inherit from this to avoid code duplication
- * @dev Tests use NOICE as the pool quote token (numeraire) as intended by NoiceLaunchpad design
+ * @dev Tests use NOICE as the pool quote token (numeraire) as intended by NumeraireLaunchpad design
  */
 abstract contract NoiceBaseTest is Test {
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
 
     // Core contracts
-    NoiceLaunchpad public launchpad;
+    NumeraireLaunchpad public launchpad;
     Airlock public airlock;
     ISablierLockup public sablierLockup;
     ISablierBatchLockup public sablierBatchLockup;
@@ -108,7 +108,7 @@ abstract contract NoiceBaseTest is Test {
         );
 
         // Deploy launchpad with test contract as owner (required for role management)
-        launchpad = new NoiceLaunchpad(airlock, router, sablierLockup, sablierBatchLockup, poolManager, address(this));
+        launchpad = new NumeraireLaunchpad(airlock, router, sablierLockup, sablierBatchLockup, poolManager, address(this));
 
         // Register modules with Airlock
         _registerAirlockModules();
@@ -142,9 +142,9 @@ abstract contract NoiceBaseTest is Test {
      * @return params Bundle parameters with default values
      */
     function _createBundleParams(
-        NoiceCreatorAllocation[] memory noiceCreatorLocks
-    ) internal view returns (BundleWithVestingParams memory params) {
-        return _createBundleParams(noiceCreatorLocks, new NoiceLpUnlockTranche[](0));
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks
+    ) internal view returns (BundleParams memory params) {
+        return _createBundleParams(noiceCreatorLocks, new NumeraireLpUnlockTranche[](0));
     }
 
     /**
@@ -155,9 +155,9 @@ abstract contract NoiceBaseTest is Test {
      * @return params Bundle parameters
      */
     function _createBundleParams(
-        NoiceCreatorAllocation[] memory noiceCreatorLocks,
-        NoiceLpUnlockTranche[] memory lpUnlockTranches
-    ) internal view virtual returns (BundleWithVestingParams memory params) {
+        NumeraireCreatorAllocation[] memory noiceCreatorLocks,
+        NumeraireLpUnlockTranche[] memory lpUnlockTranches
+    ) internal view virtual returns (BundleParams memory params) {
         // Create curves
         Curve[] memory curves = new Curve[](3);
         for (uint256 i = 0; i < 3; i++) {
@@ -215,12 +215,11 @@ abstract contract NoiceBaseTest is Test {
             salt: keccak256(abi.encodePacked(block.timestamp, block.number, noiceCreatorLocks.length, lpUnlockTranches.length))
         });
 
-        return BundleWithVestingParams({
+        return BundleParams({
             createData: createData,
-            noiceCreatorAllocations: noiceCreatorLocks,
-            noiceLpUnlockTranches: lpUnlockTranches,
-            noicePrebuyCommands: "",
-            noicePrebuyInputs: new bytes[](0)
+            creatorAllocations: noiceCreatorLocks,
+            numeraireLpUnlockTranches: lpUnlockTranches,
+            prebuyTranches: new PrebuyTranche[](0)
         });
     }
 
