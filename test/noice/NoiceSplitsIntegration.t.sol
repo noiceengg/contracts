@@ -5,7 +5,8 @@ import { NoiceBaseTest } from "./NoiceBaseTest.sol";
 import {
     BundleParams,
     NumeraireCreatorAllocation,
-    NumeraireLpUnlockTranche
+    NumeraireLpUnlockTranche,
+    PrebuyTranche
 } from "src/NoiceLaunchpad.sol";
 import { DERC20 } from "src/DERC20.sol";
 import { UniswapV4MulticurveInitializer, InitData } from "src/UniswapV4MulticurveInitializer.sol";
@@ -225,14 +226,14 @@ contract NoiceSplitsTest is NoiceBaseTest {
             salt: bytes32(uint256(block.timestamp))
         });
 
-        NumeraireCreatorAllocation[] memory noiceCreatorAllocations = new NumeraireCreatorAllocation[](0);
-        NumeraireLpUnlockTranche[] memory noiceLpUnlockTranches = new NumeraireLpUnlockTranche[](0);
+        NumeraireCreatorAllocation[] memory creatorAllocations = new NumeraireCreatorAllocation[](0);
+        NumeraireLpUnlockTranche[] memory numeraireLpUnlockTranches = new NumeraireLpUnlockTranche[](0);
 
         return BundleParams({
             createData: createData,
-            noiceCreatorAllocations: noiceCreatorAllocations,
-            
-            noiceLpUnlockTranches: noiceLpUnlockTranches,
+            creatorAllocations: creatorAllocations,
+            numeraireLpUnlockTranches: numeraireLpUnlockTranches,
+            prebuyTranches: new PrebuyTranche[](0),
             noicePrebuyCommands: "",
             noicePrebuyInputs: new bytes[](0)
         });
@@ -314,14 +315,14 @@ contract NoiceSplitsTest is NoiceBaseTest {
             salt: keccak256(abi.encodePacked(block.timestamp, block.number, "multi"))
         });
 
-        NumeraireCreatorAllocation[] memory noiceCreatorAllocations = new NumeraireCreatorAllocation[](0);
-        NumeraireLpUnlockTranche[] memory noiceLpUnlockTranches = new NumeraireLpUnlockTranche[](0);
+        NumeraireCreatorAllocation[] memory creatorAllocations = new NumeraireCreatorAllocation[](0);
+        NumeraireLpUnlockTranche[] memory numeraireLpUnlockTranches = new NumeraireLpUnlockTranche[](0);
 
         return BundleParams({
             createData: createData,
-            noiceCreatorAllocations: noiceCreatorAllocations,
-            
-            noiceLpUnlockTranches: noiceLpUnlockTranches,
+            creatorAllocations: creatorAllocations,
+            numeraireLpUnlockTranches: numeraireLpUnlockTranches,
+            prebuyTranches: new PrebuyTranche[](0),
             noicePrebuyCommands: "",
             noicePrebuyInputs: new bytes[](0)
         });

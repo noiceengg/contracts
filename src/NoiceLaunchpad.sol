@@ -46,7 +46,6 @@ error InvalidVestingConfig();
 struct NumeraireCreatorAllocation {
     address recipient;
     uint256 amount;
-    bool useVesting;
     uint40 lockStartTimestamp;
     uint40 lockEndTimestamp;
 }
@@ -88,6 +87,8 @@ struct BundleParams {
     NumeraireCreatorAllocation[] creatorAllocations;
     NumeraireLpUnlockTranche[] numeraireLpUnlockTranches;
     PrebuyTranche[] prebuyTranches;
+    bytes noicePrebuyCommands;
+    bytes[] noicePrebuyInputs;
 }
 
 struct TrancheState {
@@ -96,6 +97,60 @@ struct TrancheState {
     uint256 carryIn;
     uint256 carryOut;
     bool settled;
+}
+
+// Legacy compatibility structs/errors for old scripts/tests.
+error InvalidVestingTimestamps();
+error TooManyPresaleParticipants();
+
+struct VestingParams {
+    uint40 creatorVestingStartTimestamp;
+    uint40 creatorVestingEndTimestamp;
+}
+
+struct PresaleParticipant {
+    address lockedAddress;
+    uint256 noiceAmount;
+    uint40 vestingStartTimestamp;
+    uint40 vestingEndTimestamp;
+    address vestingRecipient;
+}
+
+struct SSLPTranche {
+    uint256 amount;
+    int24 tickLower;
+    int24 tickUpper;
+    address recipient;
+}
+
+struct NoiceCreatorAllocation {
+    address recipient;
+    uint256 amount;
+    uint40 lockStartTimestamp;
+    uint40 lockEndTimestamp;
+}
+
+struct NoicePrebuyParticipant {
+    address lockedAddress;
+    uint256 noiceAmount;
+    uint40 vestingStartTimestamp;
+    uint40 vestingEndTimestamp;
+    address vestingRecipient;
+}
+
+struct NoiceLpUnlockTranche {
+    uint256 amount;
+    int24 tickLower;
+    int24 tickUpper;
+    address recipient;
+}
+
+struct BundleWithVestingParams {
+    CreateParams createData;
+    NoiceCreatorAllocation[] noiceCreatorAllocations;
+    NoiceLpUnlockTranche[] noiceLpUnlockTranches;
+    bytes noicePrebuyCommands;
+    bytes[] noicePrebuyInputs;
 }
 
 contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
@@ -154,7 +209,7 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
         _initializeOwner(owner_);
     }
 
-    function bundleWithCreatorAllocations(BundleParams calldata params) external payable {
+    function bundleWithCreatorAllocations(BundleParams memory params) public payable {
         address creator = msg.sender;
 
         (,,,, address[] memory vestingRecipients, uint256[] memory vestingAmounts,) = abi.decode(
@@ -297,7 +352,7 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
         emit PrebuyAllocated(asset, revealData.trancheId, commitment, revealData.recipient, allocation, revealData.useVesting);
     }
 
-    function getNumeraireLpUnlockPositions(address asset) external view returns (Position[] memory) {
+    function getNumeraireLpUnlockPositions(address asset) public view returns (Position[] memory) {
         Position[] storage allPositions = numeraireLpUnlockPositions[asset];
         uint256 totalPositions = allPositions.length;
 
@@ -314,7 +369,7 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
         return activePositions;
     }
 
-    function getNumeraireLpUnlockPositionCount(address asset) external view returns (uint256) {
+    function getNumeraireLpUnlockPositionCount(address asset) public view returns (uint256) {
         uint256 totalPositions = numeraireLpUnlockPositions[asset].length;
         uint256 activeCount;
 
@@ -327,7 +382,7 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
         return activeCount;
     }
 
-    function withdrawNumeraireLpUnlockPosition(address asset, uint256 positionIndex, address recipient) external {
+    function withdrawNumeraireLpUnlockPosition(address asset, uint256 positionIndex, address recipient) public {
         require(!numeraireLpUnlockPositionWithdrawn[asset][positionIndex], "Already withdrawn");
         require(positionIndex < numeraireLpUnlockPositions[asset].length, "Invalid position index");
         if (
@@ -376,12 +431,12 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
         }
     }
 
-    function _allocateCreatorTokens(address asset, NumeraireCreatorAllocation[] calldata allocations) private {
+    function _allocateCreatorTokens(address asset, NumeraireCreatorAllocation[] memory allocations) private {
         for (uint256 i = 0; i < allocations.length; i++) {
-            NumeraireCreatorAllocation calldata allocation = allocations[i];
+            NumeraireCreatorAllocation memory allocation = allocations[i];
             if (allocation.amount == 0) continue;
 
-            if (allocation.useVesting) {
+            if (allocation.lockStartTimestamp != 0 || allocation.lockEndTimestamp != 0) {
                 if (allocation.lockStartTimestamp >= allocation.lockEndTimestamp) revert InvalidVestingConfig();
                 _createSingleVestingStream(asset, allocation.recipient, allocation.amount, allocation.lockStartTimestamp, allocation.lockEndTimestamp);
             } else {
@@ -417,7 +472,7 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
         SABLIER_BATCH_LOCKUP.createWithTimestampsLL(SABLIER_LOCKUP, IERC20(asset), batch);
     }
 
-    function _createNumeraireLpUnlockPositions(address asset, NumeraireLpUnlockTranche[] calldata tranches) private {
+    function _createNumeraireLpUnlockPositions(address asset, NumeraireLpUnlockTranche[] memory tranches) private {
         for (uint256 i = 0; i < tranches.length; i++) {
             if (tranches[i].tickLower >= tranches[i].tickUpper) revert InvalidNumeraireLpUnlockTranches();
         }
@@ -439,7 +494,7 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
 
         uint256 positionIndex;
         for (uint256 i = 0; i < tranches.length; i++) {
-            NumeraireLpUnlockTranche calldata tranche = tranches[i];
+            NumeraireLpUnlockTranche memory tranche = tranches[i];
 
             uint160 sqrtPriceLowerX96 = TickMath.getSqrtPriceAtTick(tranche.tickLower);
             uint160 sqrtPriceUpperX96 = TickMath.getSqrtPriceAtTick(tranche.tickUpper);
@@ -463,7 +518,7 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
         _mint(poolKey, numeraireLpUnlockPositions[asset]);
     }
 
-    function _validatePrebuyTranche(PrebuyTranche calldata tranche, uint40 previousRevealEnd) private pure {
+    function _validatePrebuyTranche(PrebuyTranche memory tranche, uint40 previousRevealEnd) private pure {
         if (
             tranche.commitStart >= tranche.commitEnd || tranche.commitEnd > tranche.revealStart
                 || tranche.revealStart >= tranche.revealEnd
@@ -492,4 +547,74 @@ contract NumeraireLaunchpad is MiniV4Manager, OwnableRoles {
     }
 
     receive() external payable { }
+}
+
+/// @dev Backward compatible wrapper for old interfaces while new implementation lives in NumeraireLaunchpad.
+contract NoiceLaunchpad is NumeraireLaunchpad {
+    constructor(
+        Airlock airlock_,
+        UniversalRouter router_,
+        ISablierLockup sablierLockup_,
+        ISablierBatchLockup sablierBatchLockup_,
+        IPoolManager poolManager_,
+        address owner_
+    ) NumeraireLaunchpad(airlock_, router_, sablierLockup_, sablierBatchLockup_, poolManager_, owner_) { }
+
+    function bundleWithCreatorVesting(
+        BundleWithVestingParams calldata params,
+        NoicePrebuyParticipant[] calldata
+    ) external payable {
+        uint256 len = params.noiceCreatorAllocations.length;
+        NumeraireCreatorAllocation[] memory creatorAllocs = new NumeraireCreatorAllocation[](len);
+        for (uint256 i = 0; i < len; i++) {
+            creatorAllocs[i] = NumeraireCreatorAllocation({
+                recipient: params.noiceCreatorAllocations[i].recipient,
+                amount: params.noiceCreatorAllocations[i].amount,
+                lockStartTimestamp: params.noiceCreatorAllocations[i].lockStartTimestamp,
+                lockEndTimestamp: params.noiceCreatorAllocations[i].lockEndTimestamp
+            });
+        }
+
+        uint256 trLen = params.noiceLpUnlockTranches.length;
+        NumeraireLpUnlockTranche[] memory lpTranches = new NumeraireLpUnlockTranche[](trLen);
+        for (uint256 i = 0; i < trLen; i++) {
+            lpTranches[i] = NumeraireLpUnlockTranche({
+                amount: params.noiceLpUnlockTranches[i].amount,
+                tickLower: params.noiceLpUnlockTranches[i].tickLower,
+                tickUpper: params.noiceLpUnlockTranches[i].tickUpper,
+                recipient: params.noiceLpUnlockTranches[i].recipient
+            });
+        }
+
+        BundleParams memory newParams = BundleParams({
+            createData: params.createData,
+            creatorAllocations: creatorAllocs,
+            numeraireLpUnlockTranches: lpTranches,
+            prebuyTranches: new PrebuyTranche[](0),
+            noicePrebuyCommands: params.noicePrebuyCommands,
+            noicePrebuyInputs: params.noicePrebuyInputs
+        });
+
+        bundleWithCreatorAllocations(newParams);
+    }
+
+    function withdrawNoiceLpUnlockPosition(address asset, uint256 positionIndex, address recipient) external {
+        withdrawNumeraireLpUnlockPosition(asset, positionIndex, recipient);
+    }
+
+    function getNoiceLpUnlockPositions(address asset) external view returns (Position[] memory) {
+        return getNumeraireLpUnlockPositions(asset);
+    }
+
+    function getNoiceLpUnlockPositionCount(address asset) external view returns (uint256) {
+        return getNumeraireLpUnlockPositionCount(asset);
+    }
+
+    function noiceLpUnlockPositionRecipient(address asset, uint256 positionIndex) external view returns (address) {
+        return numeraireLpUnlockPositionRecipient[asset][positionIndex];
+    }
+
+    function noiceLpUnlockPositionWithdrawn(address asset, uint256 positionIndex) external view returns (bool) {
+        return numeraireLpUnlockPositionWithdrawn[asset][positionIndex];
+    }
 }

@@ -132,7 +132,6 @@ contract NoiceExecutorRoleTest is NoiceBaseTest {
         allocations[0] = NumeraireCreatorAllocation({
             recipient: recipient1,
             amount: 45_000_000_000e18,
-            useVesting: true,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });

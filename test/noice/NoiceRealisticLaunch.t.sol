@@ -7,7 +7,8 @@ import {
     NumeraireLaunchpad,
     BundleParams,
     NumeraireCreatorAllocation,
-    NumeraireLpUnlockTranche
+    NumeraireLpUnlockTranche,
+    PrebuyTranche
 } from "src/NoiceLaunchpad.sol";
 import { Airlock, ModuleState } from "src/Airlock.sol";
 import { UniversalRouter } from "@universal-router/UniversalRouter.sol";
@@ -278,8 +279,9 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
 
         return BundleParams({
             createData: createData,
-            noiceCreatorAllocations: noiceCreatorLocks,
-            noiceLpUnlockTranches: lpUnlockTranches,
+            creatorAllocations: noiceCreatorLocks,
+            numeraireLpUnlockTranches: lpUnlockTranches,
+            prebuyTranches: new PrebuyTranche[](0),
             noicePrebuyCommands: "",
             noicePrebuyInputs: new bytes[](0)
         });
@@ -503,14 +505,6 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
         vm.prank(buyer);
         IERC20(NOICE_TOKEN).approve(address(launchpad), maxNoiceInput);
 
-                participants[0] = NoicePrebuyParticipant({
-            lockedAddress: buyer,
-            noiceAmount: maxNoiceInput,
-            vestingStartTimestamp: uint40(block.timestamp),
-            vestingEndTimestamp: uint40(block.timestamp + 365 days),
-            vestingRecipient: buyer
-        });
-
         // Predict asset address
         address predictedAsset = _computeAssetAddress(params.createData.salt);
         bool isToken0 = predictedAsset < NOICE_TOKEN;
@@ -609,14 +603,6 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
 
         vm.prank(buyer);
         IERC20(NOICE_TOKEN).approve(address(launchpad), maxNoiceInput);
-
-                participants[0] = NoicePrebuyParticipant({
-            lockedAddress: buyer,
-            noiceAmount: maxNoiceInput,
-            vestingStartTimestamp: uint40(block.timestamp),
-            vestingEndTimestamp: uint40(block.timestamp + 365 days),
-            vestingRecipient: buyer
-        });
 
         // Predict asset address
         address predictedAsset = _computeAssetAddress(params.createData.salt);
@@ -909,8 +895,9 @@ contract NoiceRealisticLaunchTest is NoiceBaseTest {
 
         return BundleParams({
             createData: createData,
-            noiceCreatorAllocations: creatorAllocs,
-            noiceLpUnlockTranches: lpUnlockTranches,
+            creatorAllocations: creatorAllocs,
+            numeraireLpUnlockTranches: lpUnlockTranches,
+            prebuyTranches: new PrebuyTranche[](0),
             noicePrebuyCommands: "",
             noicePrebuyInputs: new bytes[](0)
         });

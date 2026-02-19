@@ -219,7 +219,9 @@ abstract contract NoiceBaseTest is Test {
             createData: createData,
             creatorAllocations: noiceCreatorLocks,
             numeraireLpUnlockTranches: lpUnlockTranches,
-            prebuyTranches: new PrebuyTranche[](0)
+            prebuyTranches: new PrebuyTranche[](0),
+            noicePrebuyCommands: "",
+            noicePrebuyInputs: new bytes[](0)
         });
     }
 
