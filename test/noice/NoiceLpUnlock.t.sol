@@ -155,10 +155,7 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
         // Create valid tranches
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
         tranches[0] = NoiceLpUnlockTranche({
-            amount: tokenAmount,
-            tickLower: tickLower,
-            tickUpper: tickUpper,
-            recipient: recipient1
+            amount: tokenAmount, tickLower: tickLower, tickUpper: tickUpper, recipient: recipient1
         });
 
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
@@ -216,10 +213,7 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
             uint256 trancheTokenAmount = totalTokenAmount * tokenShares[i] / 100;
 
             tranches[i] = NoiceLpUnlockTranche({
-                amount: trancheTokenAmount,
-                tickLower: tickLowers[i],
-                tickUpper: tickUppers[i],
-                recipient: recipients[i]
+                amount: trancheTokenAmount, tickLower: tickLowers[i], tickUpper: tickUppers[i], recipient: recipients[i]
             });
         }
 
@@ -270,10 +264,7 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
 
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
         tranches[0] = NoiceLpUnlockTranche({
-            amount: tokenAmount,
-            tickLower: tickLower,
-            tickUpper: tickUpper,
-            recipient: recipient1
+            amount: tokenAmount, tickLower: tickLower, tickUpper: tickUpper, recipient: recipient1
         });
 
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
@@ -303,22 +294,13 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
         // Create 3 tranches
         NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](3);
         tranches[0] = NoiceLpUnlockTranche({
-            amount: totalTokenAmount * 40 / 100,
-            tickLower: 15_000,
-            tickUpper: 18_000,
-            recipient: recipient1
+            amount: totalTokenAmount * 40 / 100, tickLower: 15_000, tickUpper: 18_000, recipient: recipient1
         });
         tranches[1] = NoiceLpUnlockTranche({
-            amount: totalTokenAmount * 35 / 100,
-            tickLower: 10_020,
-            tickUpper: 13_980,
-            recipient: recipient2
+            amount: totalTokenAmount * 35 / 100, tickLower: 10_020, tickUpper: 13_980, recipient: recipient2
         });
         tranches[2] = NoiceLpUnlockTranche({
-            amount: totalTokenAmount * 25 / 100,
-            tickLower: 5040,
-            tickUpper: 9000,
-            recipient: recipient3
+            amount: totalTokenAmount * 25 / 100, tickLower: 5040, tickUpper: 9000, recipient: recipient3
         });
 
         NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
@@ -384,5 +366,65 @@ contract NoiceLpUnlockValidTranchesTest is NoiceLpUnlockTest {
         for (uint256 i = 0; i < 3; i++) {
             assertEq(positionsEmpty[i].liquidity, 0, "All positions should be empty");
         }
+    }
+
+    function test_LpUnlock_CreatorCanWithdraw() public {
+        address creator = makeAddr("creator");
+        uint256 tokenAmount = TOTAL_SUPPLY * 1000 / 10_000;
+
+        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
+        tranches[0] =
+            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
+
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
+
+        vm.prank(creator);
+        launchpad.bundleWithCreatorVesting(params, participants);
+        latestAsset = _computeAssetAddress(params.createData.salt);
+
+        vm.prank(creator);
+        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+        assertTrue(launchpad.noiceLpUnlockPositionWithdrawn(latestAsset, 0));
+    }
+
+    function test_LpUnlock_RecipientCanWithdraw() public {
+        uint256 tokenAmount = TOTAL_SUPPLY * 1000 / 10_000;
+
+        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
+        tranches[0] =
+            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
+
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
+
+        launchpad.bundleWithCreatorVesting(params, participants);
+        latestAsset = _computeAssetAddress(params.createData.salt);
+
+        vm.prank(recipient1);
+        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
+        assertTrue(launchpad.noiceLpUnlockPositionWithdrawn(latestAsset, 0));
+    }
+
+    function test_LpUnlock_ThirdPartyCannotWithdraw() public {
+        address thirdParty = makeAddr("thirdParty");
+        uint256 tokenAmount = TOTAL_SUPPLY * 1000 / 10_000;
+
+        NoiceLpUnlockTranche[] memory tranches = new NoiceLpUnlockTranche[](1);
+        tranches[0] =
+            NoiceLpUnlockTranche({ amount: tokenAmount, tickLower: 10_020, tickUpper: 19_980, recipient: recipient1 });
+
+        NoiceCreatorAllocation[] memory noiceCreatorLocks = new NoiceCreatorAllocation[](0);
+        BundleWithVestingParams memory params = _createBundleParams(noiceCreatorLocks, tranches);
+        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
+
+        launchpad.bundleWithCreatorVesting(params, participants);
+        latestAsset = _computeAssetAddress(params.createData.salt);
+
+        vm.prank(thirdParty);
+        vm.expectRevert();
+        launchpad.withdrawNoiceLpUnlockPosition(latestAsset, 0, recipient1);
     }
 }

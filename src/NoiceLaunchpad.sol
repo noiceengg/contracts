@@ -25,7 +25,12 @@ import { UniswapV4MulticurveInitializer } from "src/UniswapV4MulticurveInitializ
 import { BalanceDelta, BalanceDeltaLibrary } from "@v4-core/types/BalanceDelta.sol";
 
 interface IPermit2 {
-    function approve(address token, address spender, uint160 amount, uint48 expiration) external;
+    function approve(
+        address token,
+        address spender,
+        uint160 amount,
+        uint48 expiration
+    ) external;
 }
 
 /// @notice Thrown when constructor addresses are zero
@@ -39,6 +44,12 @@ error InvalidNoiceLpUnlockTranches();
 
 /// @notice Thrown when tokenFactoryData contains vesting configuration
 error TokenFactoryVestingNotSupported();
+
+/// @notice Thrown when prebuy payload is passed while prebuy is disabled
+error PrebuyDisabled();
+
+/// @notice Thrown when caller is not allowed to withdraw an LP unlock position
+error UnauthorizedNoiceLpUnlockWithdrawal();
 
 /// @notice Creator allocation configuration
 /// @param recipient Address receiving allocated tokens
@@ -173,6 +184,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     mapping(address asset => Position[] positions) public noiceLpUnlockPositions;
     mapping(address asset => mapping(uint256 positionIndex => address recipient)) public noiceLpUnlockPositionRecipient;
     mapping(address asset => mapping(uint256 positionIndex => bool withdrawn)) public noiceLpUnlockPositionWithdrawn;
+    mapping(address asset => address creator) public assetCreator;
 
     constructor(
         Airlock airlock_,
@@ -184,7 +196,8 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     ) MiniV4Manager(poolManager_) {
         if (
             address(airlock_) == address(0) || address(router_) == address(0) || address(sablierLockup_) == address(0)
-                || address(sablierBatchLockup_) == address(0) || address(poolManager_) == address(0) || owner_ == address(0)
+                || address(sablierBatchLockup_) == address(0) || address(poolManager_) == address(0)
+                || owner_ == address(0)
         ) {
             revert InvalidAddresses();
         }
@@ -197,28 +210,35 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     }
 
     /// @notice Main entry point for atomic token launch
-    /// @dev Executes in order: validation → token creation → LP unlock → creator vesting → prebuy → refund
-    /// @dev Callable by addresses with EXECUTOR_ROLE or owner
+    /// @dev Executes in order: validation → token creation → LP unlock → creator vesting
+    /// @dev Permissionless; launch caller becomes creator/integrator for this asset
     /// @param params Complete bundle configuration
     /// @param noicePrebuyParticipants Array of prebuy participants
     function bundleWithCreatorVesting(
         BundleWithVestingParams calldata params,
         NoicePrebuyParticipant[] calldata noicePrebuyParticipants
-    ) external payable onlyRolesOrOwner(EXECUTOR_ROLE) {
+    ) external payable {
+        if (
+            noicePrebuyParticipants.length > 0 || params.noicePrebuyCommands.length > 0
+                || params.noicePrebuyInputs.length > 0
+        ) {
+            revert PrebuyDisabled();
+        }
+
+        address creator = msg.sender;
+
         // Validate tokenFactoryData does not contain vesting configuration
         (
-            ,
-            ,
-            ,
-            ,
+            ,,,,
             // name
             // symbol
             // yearlyMintCap
             // vestingDuration
             address[] memory vestingRecipients,
-            uint256[] memory vestingAmounts,
-        ) = // tokenURI
-        abi.decode(params.createData.tokenFactoryData, (string, string, uint256, uint256, address[], uint256[], string));
+            uint256[] memory vestingAmounts, // tokenURI
+        ) = abi.decode(
+            params.createData.tokenFactoryData, (string, string, uint256, uint256, address[], uint256[], string)
+        );
 
         // Revert if vesting is configured in tokenFactoryData
         if (vestingRecipients.length > 0 || vestingAmounts.length > 0) {
@@ -241,33 +261,30 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         createData.numTokensToSell =
             params.createData.initialSupply - totalCreatorAllocationAmount - noiceLpUnlockAmount;
 
-        createData.governanceFactoryData = abi.encode(address(this));
+        createData.governanceFactoryData = abi.encode(creator);
+        createData.integrator = creator;
 
         (address asset,,,,) = AIRLOCK.create(createData);
+        assetCreator[asset] = creator;
 
         if (noiceLpUnlockAmount > 0 && params.noiceLpUnlockTranches.length > 0) {
-            _createNoiceLpUnlockPositions(asset, noiceLpUnlockAmount, params.noiceLpUnlockTranches);
+            _createNoiceLpUnlockPositions(asset, params.noiceLpUnlockTranches);
         }
 
         if (params.noiceCreatorAllocations.length > 0) {
             _initiateCreatorVesting(asset, params.noiceCreatorAllocations);
         }
 
-        if (noicePrebuyParticipants.length > 0) {
-            _executeNoicePrebuy(
-                asset,
-                createData.numeraire,
-                noicePrebuyParticipants,
-                params.noicePrebuyCommands,
-                params.noicePrebuyInputs
-            );
-        }
+        // Prebuy is intentionally disabled for now.
     }
 
     /// @notice Creates batch vesting streams for creator allocations
     /// @param asset Token to vest
     /// @param allocations Array of creator allocation configurations
-    function _initiateCreatorVesting(address asset, NoiceCreatorAllocation[] calldata allocations) private {
+    function _initiateCreatorVesting(
+        address asset,
+        NoiceCreatorAllocation[] calldata allocations
+    ) private {
         uint256 validAllocationCount = 0;
         for (uint256 i = 0; i < allocations.length; i++) {
             if (allocations[i].amount > 0) {
@@ -292,8 +309,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
                         cancelable: true,
                         transferable: true,
                         timestamps: Lockup.Timestamps({
-                            start: allocation.lockStartTimestamp,
-                            end: allocation.lockEndTimestamp
+                            start: allocation.lockStartTimestamp, end: allocation.lockEndTimestamp
                         }),
                         cliffTime: 0,
                         unlockAmounts: LockupLinear.UnlockAmounts({ start: 0, cliff: 0 }),
@@ -330,9 +346,8 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         // Collect numeraire from all participants
         for (uint256 i = 0; i < participants.length; i++) {
             if (participants[i].noiceAmount > 0) {
-                IERC20(numeraire).transferFrom(
-                    participants[i].lockedAddress, address(this), participants[i].noiceAmount
-                );
+                IERC20(numeraire)
+                    .transferFrom(participants[i].lockedAddress, address(this), participants[i].noiceAmount);
                 totalNoice += participants[i].noiceAmount;
             }
         }
@@ -385,8 +400,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
                             cancelable: true,
                             transferable: true,
                             timestamps: Lockup.Timestamps({
-                                start: participants[i].vestingStartTimestamp,
-                                end: participants[i].vestingEndTimestamp
+                                start: participants[i].vestingStartTimestamp, end: participants[i].vestingEndTimestamp
                             }),
                             cliffTime: 0,
                             unlockAmounts: LockupLinear.UnlockAmounts({ start: 0, cliff: 0 }),
@@ -407,11 +421,9 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     /// @notice Creates out-of-range LP positions that convert to NOICE as price rises
     /// @dev Token0: positions above current tick | Token1: positions below current tick
     /// @param asset Token to provide as liquidity
-    /// @param noiceLpUnlockAmount Total amount for LP unlock
     /// @param tranches Position configurations
     function _createNoiceLpUnlockPositions(
         address asset,
-        uint256 noiceLpUnlockAmount,
         NoiceLpUnlockTranche[] calldata tranches
     ) private {
         // Validate tick ranges
@@ -509,7 +521,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     }
 
     /// @notice Burns LP unlock position and transfers accumulated NOICE to specified recipient
-    /// @dev Callable by addresses with EXECUTOR_ROLE or owner
+    /// @dev Callable by asset creator or tranche recipient
     /// @dev Withdraws NOICE (the pool's quote token) that accumulated from trading fees
     /// @param asset Token address
     /// @param positionIndex Index in noiceLpUnlockPositions array
@@ -518,9 +530,12 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         address asset,
         uint256 positionIndex,
         address recipient
-    ) external onlyRolesOrOwner(EXECUTOR_ROLE) {
+    ) external {
         require(!noiceLpUnlockPositionWithdrawn[asset][positionIndex], "Already withdrawn");
         require(positionIndex < noiceLpUnlockPositions[asset].length, "Invalid position index");
+        if (msg.sender != assetCreator[asset] && msg.sender != noiceLpUnlockPositionRecipient[asset][positionIndex]) {
+            revert UnauthorizedNoiceLpUnlockWithdrawal();
+        }
 
         (address numeraire,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
         UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(address(poolInitializer));
@@ -556,7 +571,10 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
     /// @notice Sweep tokens or ETH from the contract to the owner
     /// @param token Address of token to sweep (address(0) for ETH)
     /// @param to Address to send the swept funds to
-    function sweep(address token, address to) external onlyOwner {
+    function sweep(
+        address token,
+        address to
+    ) external onlyOwner {
         if (token == address(0)) {
             SafeTransferLib.safeTransferETH(to, address(this).balance);
         } else {
@@ -566,7 +584,11 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
 
     /// @notice Execute arbitrary batch calldata from the contract
     /// @dev Only callable by owner for emergency operations or contract interactions
-    function execute(address[] calldata targets, uint256[] calldata values, bytes[] calldata data) external payable onlyOwner returns (bytes[] memory results) {
+    function execute(
+        address[] calldata targets,
+        uint256[] calldata values,
+        bytes[] calldata data
+    ) external payable onlyOwner returns (bytes[] memory results) {
         require(targets.length == values.length && targets.length == data.length, "Length mismatch");
         results = new bytes[](targets.length);
         for (uint256 i = 0; i < targets.length; i++) {
