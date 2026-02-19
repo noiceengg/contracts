@@ -3,10 +3,10 @@ pragma solidity ^0.8.24;
 
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
 import {
-    BundleWithVestingParams,
-    NoiceCreatorAllocation,
-    NoicePrebuyParticipant,
-    NoiceLpUnlockTranche
+    BundleParams,
+    NumeraireCreatorAllocation,
+    NumeraireLpUnlockTranche,
+    PrebuyTranche
 } from "src/NoiceLaunchpad.sol";
 import { DERC20 } from "src/DERC20.sol";
 import { UniswapV4MulticurveInitializer, InitData } from "src/UniswapV4MulticurveInitializer.sol";
@@ -78,10 +78,9 @@ contract NoiceSplitsTest is NoiceBaseTest {
         splitAddress = _createPushSplit();
 
         // Launch token with split as LP fee beneficiary
-        BundleWithVestingParams memory params = _createBundleParamsWithSplit();
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParamsWithSplit();
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt, "SplitsToken", "SPLITS");
 
@@ -101,10 +100,9 @@ contract NoiceSplitsTest is NoiceBaseTest {
         address split = _createPushSplit();
 
         // Create bundle params with split + another beneficiary
-        BundleWithVestingParams memory params = _createBundleParamsWithMultipleBeneficiaries(split);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParamsWithMultipleBeneficiaries(split);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt, "MultiToken", "MULTI");
 
@@ -131,10 +129,9 @@ contract NoiceSplitsTest is NoiceBaseTest {
         splitAddress = _createPushSplit();
 
         // Launch token
-        BundleWithVestingParams memory params = _createBundleParamsWithSplit();
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParamsWithSplit();
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt, "SplitsToken", "SPLITS");
 
@@ -171,7 +168,7 @@ contract NoiceSplitsTest is NoiceBaseTest {
         return factory.createSplit(split, deployer, deployer);
     }
 
-    function _createBundleParamsWithSplit() internal view returns (BundleWithVestingParams memory) {
+    function _createBundleParamsWithSplit() internal view returns (BundleParams memory) {
         Curve[] memory curves = new Curve[](3);
         for (uint256 i = 0; i < 3; i++) {
             curves[i] = Curve({
@@ -229,14 +226,14 @@ contract NoiceSplitsTest is NoiceBaseTest {
             salt: bytes32(uint256(block.timestamp))
         });
 
-        NoiceCreatorAllocation[] memory noiceCreatorAllocations = new NoiceCreatorAllocation[](0);
-        NoiceLpUnlockTranche[] memory noiceLpUnlockTranches = new NoiceLpUnlockTranche[](0);
+        NumeraireCreatorAllocation[] memory creatorAllocations = new NumeraireCreatorAllocation[](0);
+        NumeraireLpUnlockTranche[] memory numeraireLpUnlockTranches = new NumeraireLpUnlockTranche[](0);
 
-        return BundleWithVestingParams({
+        return BundleParams({
             createData: createData,
-            noiceCreatorAllocations: noiceCreatorAllocations,
-            
-            noiceLpUnlockTranches: noiceLpUnlockTranches,
+            creatorAllocations: creatorAllocations,
+            numeraireLpUnlockTranches: numeraireLpUnlockTranches,
+            prebuyTranches: new PrebuyTranche[](0),
             noicePrebuyCommands: "",
             noicePrebuyInputs: new bytes[](0)
         });
@@ -244,7 +241,7 @@ contract NoiceSplitsTest is NoiceBaseTest {
 
     function _createBundleParamsWithMultipleBeneficiaries(
         address split
-    ) internal view returns (BundleWithVestingParams memory) {
+    ) internal view returns (BundleParams memory) {
         Curve[] memory curves = new Curve[](3);
         for (uint256 i = 0; i < 3; i++) {
             curves[i] = Curve({
@@ -318,14 +315,14 @@ contract NoiceSplitsTest is NoiceBaseTest {
             salt: keccak256(abi.encodePacked(block.timestamp, block.number, "multi"))
         });
 
-        NoiceCreatorAllocation[] memory noiceCreatorAllocations = new NoiceCreatorAllocation[](0);
-        NoiceLpUnlockTranche[] memory noiceLpUnlockTranches = new NoiceLpUnlockTranche[](0);
+        NumeraireCreatorAllocation[] memory creatorAllocations = new NumeraireCreatorAllocation[](0);
+        NumeraireLpUnlockTranche[] memory numeraireLpUnlockTranches = new NumeraireLpUnlockTranche[](0);
 
-        return BundleWithVestingParams({
+        return BundleParams({
             createData: createData,
-            noiceCreatorAllocations: noiceCreatorAllocations,
-            
-            noiceLpUnlockTranches: noiceLpUnlockTranches,
+            creatorAllocations: creatorAllocations,
+            numeraireLpUnlockTranches: numeraireLpUnlockTranches,
+            prebuyTranches: new PrebuyTranche[](0),
             noicePrebuyCommands: "",
             noicePrebuyInputs: new bytes[](0)
         });

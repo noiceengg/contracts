@@ -3,39 +3,37 @@ pragma solidity ^0.8.24;
 
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
 import {
-    BundleWithVestingParams,
-    NoiceCreatorAllocation,
-    NoicePrebuyParticipant,
-    NoiceLpUnlockTranche
+    BundleParams,
+    NumeraireCreatorAllocation,
+    NumeraireLpUnlockTranche
 } from "src/NoiceLaunchpad.sol";
 import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
 
 /**
- * @title NoiceCreatorAllocationTest
+ * @title NumeraireCreatorAllocationTest
  * @notice Tests creator token allocations with Sablier vesting integration
  * @dev Validates Sablier stream creation, vesting schedules, and withdrawals
  */
-contract NoiceCreatorAllocationTest is NoiceBaseTest {
+contract NumeraireCreatorAllocationTest is NoiceBaseTest {
     address public latestAsset;
 
     function test_CreatorAllocation_SingleRecipient_VerifySablier() public {
         address recipient = makeAddr("founder");
         uint256 lockAmount = 45_000_000_000e18; // 45B tokens (45%)
 
-        NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](1);
-        locks[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory locks = new NumeraireCreatorAllocation[](1);
+        locks[0] = NumeraireCreatorAllocation({
             recipient: recipient,
             amount: lockAmount,
             lockStartTimestamp: uint40(block.timestamp + 1 days),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(locks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        BundleParams memory params = _createBundleParams(locks);
+        
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
@@ -85,32 +83,31 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
         address advisor = makeAddr("advisor");
         address treasury = makeAddr("treasury");
 
-        NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](3);
-        locks[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory locks = new NumeraireCreatorAllocation[](3);
+        locks[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 27_000_000_000e18, // 27B tokens
             lockStartTimestamp: uint40(block.timestamp + 30 days),
             lockEndTimestamp: uint40(block.timestamp + 730 days)
         });
-        locks[1] = NoiceCreatorAllocation({
+        locks[1] = NumeraireCreatorAllocation({
             recipient: advisor,
             amount: 13_500_000_000e18, // 13.5B tokens
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
-        locks[2] = NoiceCreatorAllocation({
+        locks[2] = NumeraireCreatorAllocation({
             recipient: treasury,
             amount: 4_500_000_000e18, // 4.5B tokens
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 180 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(locks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        BundleParams memory params = _createBundleParams(locks);
+        
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
@@ -159,20 +156,19 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
 
         uint256 startTime = block.timestamp;
 
-        NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](1);
-        locks[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory locks = new NumeraireCreatorAllocation[](1);
+        locks[0] = NumeraireCreatorAllocation({
             recipient: recipient,
             amount: lockAmount,
             lockStartTimestamp: uint40(startTime),
             lockEndTimestamp: uint40(startTime + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(locks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        BundleParams memory params = _createBundleParams(locks);
+        
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
@@ -206,32 +202,31 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
     }
 
     function test_CreatorAllocation_ZeroAmountSkipped() public {
-        NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](3);
-        locks[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory locks = new NumeraireCreatorAllocation[](3);
+        locks[0] = NumeraireCreatorAllocation({
             recipient: makeAddr("recipient1"),
             amount: 20_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp + 1 days),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
-        locks[1] = NoiceCreatorAllocation({
+        locks[1] = NumeraireCreatorAllocation({
             recipient: makeAddr("recipient2"),
             amount: 0, // Zero amount
             lockStartTimestamp: uint40(block.timestamp + 1 days),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
-        locks[2] = NoiceCreatorAllocation({
+        locks[2] = NumeraireCreatorAllocation({
             recipient: makeAddr("recipient3"),
             amount: 10_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp + 1 days),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(locks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        BundleParams memory params = _createBundleParams(locks);
+        
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         // Should create only 2 streams (skip zero amount)
         uint256 nextStreamIdAfter = sablierLockup.nextStreamId();
@@ -240,7 +235,7 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
 
     function test_CreatorAllocation_100Recipients() public {
         // Create 100 creator locks
-        NoiceCreatorAllocation[] memory locks = new NoiceCreatorAllocation[](100);
+        NumeraireCreatorAllocation[] memory locks = new NumeraireCreatorAllocation[](100);
         uint256 totalLocked = 0;
 
         // Total supply is 100B, allocate ~45B to creator locks (45%)
@@ -252,7 +247,7 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
             // Scale down to fit in 45B total
             amount = amount * 45 / 51; // Reduces to ~44.1B total
 
-            locks[i] = NoiceCreatorAllocation({
+            locks[i] = NumeraireCreatorAllocation({
                 recipient: recipient,
                 amount: amount,
                 lockStartTimestamp: uint40(block.timestamp + (i % 10) * 1 days), // Varying cliff periods
@@ -262,12 +257,11 @@ contract NoiceCreatorAllocationTest is NoiceBaseTest {
             totalLocked += amount;
         }
 
-        BundleWithVestingParams memory params = _createBundleParams(locks);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        BundleParams memory params = _createBundleParams(locks);
+        
         uint256 nextStreamIdBefore = sablierLockup.nextStreamId();
 
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import { NoiceBaseTest } from "./NoiceBaseTest.sol";
-import { BundleWithVestingParams, NoiceCreatorAllocation, NoicePrebuyParticipant } from "src/NoiceLaunchpad.sol";
+import { BundleParams, NumeraireCreatorAllocation } from "src/NoiceLaunchpad.sol";
 import { IERC20 } from "@openzeppelin/token/ERC20/IERC20.sol";
 import { ISablierLockup } from "@sablier/v2-core/interfaces/ISablierLockup.sol";
 import { Lockup, LockupLinear, Broker } from "@sablier/v2-core/types/DataTypes.sol";
@@ -21,18 +21,17 @@ contract NoiceStreamCancellationTest is NoiceBaseTest {
 
     function test_CancelStream_SingleCreatorStream() public {
         // Create stream
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](1);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](1);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 45_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParams(allocations);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
@@ -63,32 +62,31 @@ contract NoiceStreamCancellationTest is NoiceBaseTest {
 
     function test_CancelStream_MultipleStreams() public {
         // Create multiple streams
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](3);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](3);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 27_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 730 days)
         });
-        allocations[1] = NoiceCreatorAllocation({
+        allocations[1] = NumeraireCreatorAllocation({
             recipient: advisor,
             amount: 13_500_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
-        allocations[2] = NoiceCreatorAllocation({
+        allocations[2] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 4_500_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 180 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
+        BundleParams memory params = _createBundleParams(allocations);
+        
         uint256 firstStreamId = sablierLockup.nextStreamId();
 
-        launchpad.bundleWithCreatorVesting(params, participants);
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
 
@@ -122,18 +120,17 @@ contract NoiceStreamCancellationTest is NoiceBaseTest {
 
     function test_CancelStream_OnlyOwner() public {
         // Create stream
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](1);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](1);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 45_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParams(allocations);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         uint256 streamId = sablierLockup.nextStreamId() - 1;
 
@@ -158,18 +155,17 @@ contract NoiceStreamCancellationTest is NoiceBaseTest {
 
     function test_CancelStream_NotSender() public {
         // Create stream from launchpad
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](1);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](1);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 45_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParams(allocations);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         uint256 ourStreamId = sablierLockup.nextStreamId() - 1;
 
@@ -209,18 +205,17 @@ contract NoiceStreamCancellationTest is NoiceBaseTest {
 
     function test_CancelStream_CantCancelTwice() public {
         // Create stream
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](1);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](1);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 45_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParams(allocations);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         uint256 streamId = sablierLockup.nextStreamId() - 1;
 
@@ -240,18 +235,17 @@ contract NoiceStreamCancellationTest is NoiceBaseTest {
 
     function test_CancelStream_RefundsToLaunchpad() public {
         // Create stream
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](1);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](1);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 45_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParams(allocations);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
         uint256 streamId = sablierLockup.nextStreamId() - 1;
@@ -283,18 +277,17 @@ contract NoiceStreamCancellationTest is NoiceBaseTest {
 
     function test_CancelStream_UseSweeepToRedistribute() public {
         // Create stream
-        NoiceCreatorAllocation[] memory allocations = new NoiceCreatorAllocation[](1);
-        allocations[0] = NoiceCreatorAllocation({
+        NumeraireCreatorAllocation[] memory allocations = new NumeraireCreatorAllocation[](1);
+        allocations[0] = NumeraireCreatorAllocation({
             recipient: founder,
             amount: 45_000_000_000e18,
             lockStartTimestamp: uint40(block.timestamp),
             lockEndTimestamp: uint40(block.timestamp + 365 days)
         });
 
-        BundleWithVestingParams memory params = _createBundleParams(allocations);
-        NoicePrebuyParticipant[] memory participants = new NoicePrebuyParticipant[](0);
-
-        launchpad.bundleWithCreatorVesting(params, participants);
+        BundleParams memory params = _createBundleParams(allocations);
+        
+        launchpad.bundleWithCreatorAllocations(params);
 
         latestAsset = _computeAssetAddress(params.createData.salt);
         uint256 streamId = sablierLockup.nextStreamId() - 1;
