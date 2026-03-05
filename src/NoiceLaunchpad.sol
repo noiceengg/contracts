@@ -21,11 +21,27 @@ import { Currency } from "@v4-core/types/Currency.sol";
 import { StateLibrary } from "@v4-core/libraries/StateLibrary.sol";
 import { TickMath } from "@v4-core/libraries/TickMath.sol";
 import { LiquidityAmounts } from "@v4-periphery/libraries/LiquidityAmounts.sol";
-import { UniswapV4MulticurveInitializer } from "src/UniswapV4MulticurveInitializer.sol";
 import { BalanceDelta, BalanceDeltaLibrary } from "@v4-core/types/BalanceDelta.sol";
+import { Curve } from "src/libraries/Multicurve.sol";
+import { BeneficiaryData } from "src/types/BeneficiaryData.sol";
 
 interface IPermit2 {
     function approve(address token, address spender, uint160 amount, uint48 expiration) external;
+}
+
+interface IDopplerHookInitializerState {
+    function getState(address asset)
+        external
+        view
+        returns (
+            address numeraire,
+            uint256 totalTokensOnBondingCurve,
+            address dopplerHook,
+            bytes memory graduationDopplerHookCalldata,
+            uint8 status,
+            PoolKey memory poolKey,
+            int24 farTick
+        );
 }
 
 /// @notice Thrown when constructor addresses are zero
@@ -422,8 +438,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         }
 
         (,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
-        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(address(poolInitializer));
-        (,, PoolKey memory poolKey,) = initializer.getState(asset);
+        (,,,,, PoolKey memory poolKey,) = IDopplerHookInitializerState(address(poolInitializer)).getState(asset);
 
         bool isToken0 = asset == Currency.unwrap(poolKey.currency0);
         (, int24 currentTick,,) = poolManager.getSlot0(poolKey.toId());
@@ -523,8 +538,7 @@ contract NoiceLaunchpad is MiniV4Manager, OwnableRoles {
         require(positionIndex < noiceLpUnlockPositions[asset].length, "Invalid position index");
 
         (address numeraire,,,, IPoolInitializer poolInitializer,,,,,) = AIRLOCK.getAssetData(asset);
-        UniswapV4MulticurveInitializer initializer = UniswapV4MulticurveInitializer(address(poolInitializer));
-        (,, PoolKey memory poolKey,) = initializer.getState(asset);
+        (,,,,, PoolKey memory poolKey,) = IDopplerHookInitializerState(address(poolInitializer)).getState(asset);
 
         Position[] memory positionsToBurn = new Position[](1);
         positionsToBurn[0] = noiceLpUnlockPositions[asset][positionIndex];
